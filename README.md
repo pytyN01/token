@@ -1,5 +1,5 @@
 # Dependable Token Script
 
-Top 4000 token visualization script
+Top 4000 token visualization script.
 
-[LIVE SITE](https://dependable-token.vercel.app).
+[LIVE SITE](https://dependable-token.vercel.app)
