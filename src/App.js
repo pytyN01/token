@@ -57,7 +57,7 @@ const Home = () => {
     const fetchCryptoData = async () => {
       try {
         const response = await axios.get(
-          "https://api.coingecko.com/api/v3/coins/markets",
+          "https://corsproxy.io/?https://api.coingecko.com/api/v3/coins/markets",
           {
             params: {
               vs_currency: "usd",
