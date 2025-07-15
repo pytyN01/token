@@ -1,11 +1,20 @@
 import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
 
-const pageCount = 20;
+const pageCount = 17;
 const countPerPage = 250;
-const delayPerRequest = 11000;
+const delayPerRequest = 10000;
 
 const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
+
+const toDecimalString = (num) => {
+  const parsed = Number(num);
+  if (isNaN(parsed)) return num;
+  return parsed.toLocaleString("en-US", {
+    useGrouping: false,
+    maximumFractionDigits: 20,
+  });
+};
 
 const formatTime = (seconds) => {
   const mins = Math.floor(seconds / 60);
@@ -22,7 +31,6 @@ const Home = () => {
   const countdownInterval = useRef(null);
   const endTime = useRef(null);
 
-  // ⏳ Countdown Timer – runs once on mount
   useEffect(() => {
     const estimatedTime = (pageCount - 1) * delayPerRequest + 6000;
     endTime.current = Date.now() + estimatedTime;
@@ -43,7 +51,6 @@ const Home = () => {
     };
   }, []);
 
-  // 📡 Fetching Data Effect
   useEffect(() => {
     const controller = new AbortController();
 
@@ -120,8 +127,8 @@ const Home = () => {
               <td>{index + 1}</td>
               <td>{crypto.name}</td>
               <td>{crypto.symbol.toUpperCase()}</td>
-              <td>${crypto.current_price}</td>
-              <td>${crypto.ath}</td>
+              <td>${toDecimalString(crypto.current_price)}</td>
+              <td>${toDecimalString(crypto.ath)}</td>
               <td>{new Date(crypto.ath_date).toLocaleDateString()}</td>
               <td>{(crypto.ath / crypto.current_price).toFixed(2)}</td>
             </tr>
