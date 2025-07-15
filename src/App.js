@@ -3,7 +3,7 @@ import axios from "axios";
 
 const pageCount = 17;
 const countPerPage = 250;
-const delayPerRequest = 10000;
+const delayPerRequest = 11000;
 
 const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
 
@@ -57,7 +57,7 @@ const Home = () => {
     const fetchCryptoData = async () => {
       try {
         const response = await axios.get(
-          "https://corsproxy.io/?https://api.coingecko.com/api/v3/coins/markets",
+          "https://api.coingecko.com/api/v3/coins/markets",
           {
             params: {
               vs_currency: "usd",
