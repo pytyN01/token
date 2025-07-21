@@ -8,13 +8,22 @@ const delayPerRequest = 11000;
 const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
 
 const toDecimalString = (num) => {
+  if (typeof num === "string") {
+    if (num.includes("e") || num.includes("E")) {
+      return Number(num).toFixed(20).replace(/\.?0+$/, "");
+    }
+    return num;
+  }
+
   const parsed = Number(num);
   if (isNaN(parsed)) return num;
+
   return parsed.toLocaleString("en-US", {
     useGrouping: false,
     maximumFractionDigits: 20,
   });
 };
+
 
 const formatTime = (seconds) => {
   const mins = Math.floor(seconds / 60);
