@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
 
-const pageCount = 17;
+const pageCount = 24;
 const countPerPage = 250;
-const delayPerRequest = 11000;
+const delayPerRequest = 12000;
 
 const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
 
