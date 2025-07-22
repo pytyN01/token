@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
 
-const pageCount = 24;
+const pageCount = 17;
 const countPerPage = 250;
 const delayPerRequest = 12000;
 
