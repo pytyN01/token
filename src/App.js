@@ -3,27 +3,18 @@ import axios from "axios";
 
 const pageCount = 17;
 const countPerPage = 250;
-const delayPerRequest = 12000;
+const delayPerRequest = 10500;
 
 const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
 
 const toDecimalString = (num) => {
-  if (typeof num === "string") {
-    if (num.includes("e") || num.includes("E")) {
-      return Number(num).toFixed(20).replace(/\.?0+$/, "");
-    }
-    return num;
-  }
-
   const parsed = Number(num);
   if (isNaN(parsed)) return num;
-
   return parsed.toLocaleString("en-US", {
     useGrouping: false,
     maximumFractionDigits: 20,
   });
 };
-
 
 const formatTime = (seconds) => {
   const mins = Math.floor(seconds / 60);
@@ -41,7 +32,7 @@ const Home = () => {
   const endTime = useRef(null);
 
   useEffect(() => {
-    const estimatedTime = (pageCount - 1) * delayPerRequest + 6000;
+    const estimatedTime = (pageCount - 1) * delayPerRequest + 7000;
     endTime.current = Date.now() + estimatedTime;
 
     countdownInterval.current = setInterval(() => {
