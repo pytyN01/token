@@ -3,7 +3,7 @@ import axios from "axios";
 
 const pageCount = 17;
 const countPerPage = 250;
-const delayPerRequest = 10500;
+const delayPerRequest = 11000;
 
 const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
 
