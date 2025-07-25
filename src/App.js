@@ -5,6 +5,19 @@ const pageCount = 18;
 const countPerPage = 250;
 const delayPerRequest = 11500;
 
+const extraCoinIds = [
+  "boson-protocol",      // BOSON
+  "myro",                // MYRO
+  "neiro-ethereum",      // NEIROETH
+  "space-and-time",      // SXT
+  "scroll",              // SCROLL
+  "capybara-nation",     // BARA
+  "levva-protocol",      // LVVA
+  "crob",                // CROB
+  "buy-the-dip",         // DIP
+  "crow",                // CAW (assuming 'crow' is CAW)
+];
+
 const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
 
 const toDecimalString = (num) => {
@@ -77,6 +90,28 @@ const Home = () => {
           await sleep(delayPerRequest);
           setPage((prevPage) => prevPage + 1);
         } else {
+          // Fetch extra coins once all top pages are done
+          const extraResponse = await axios.get(
+            "https://api.coingecko.com/api/v3/coins/markets",
+            {
+              params: {
+                vs_currency: "usd",
+                ids: extraCoinIds.join(","),
+                order: "market_cap_desc",
+                sparkline: false,
+              },
+              signal: controller.signal,
+            }
+          );
+
+          // Avoid duplicates
+          const allData = [...cryptoData, ...extraResponse.data];
+          const uniqueData = Array.from(
+            new Map(allData.map((item) => [item.id, item])).values()
+          );
+
+          setCryptoData(uniqueData);
+          setCount(uniqueData.length);
           clearInterval(countdownInterval.current);
           setCountdown(0);
         }
