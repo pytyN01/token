@@ -7,15 +7,11 @@ const delayPerRequest = 11500;
 
 const extraCoinIds = [
   "boson-protocol",      // BOSON
-  "myro",                // MYRO
-  "neiro-ethereum",      // NEIROETH
-  "space-and-time",      // SXT
-  "scroll",              // SCROLL
   "capybara-nation",     // BARA
-  "levva-protocol",      // LVVA
-  "crob",                // CROB
   "buy-the-dip",         // DIP
-  "crow",                // CAW
+  "levva-protocol",      // LVVA
+  "space-and-time",      // SXT
+  "crob-coin",           // CROB
 ];
 
 const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
@@ -68,26 +64,7 @@ const Home = () => {
 
     const fetchCryptoData = async () => {
       try {
-        // 1. Fetch extra coins first
-        const extraResponse = await axios.get(
-          "https://api.coingecko.com/api/v3/coins/markets",
-          {
-            params: {
-              vs_currency: "usd",
-              ids: extraCoinIds.join(","),
-              order: "market_cap_desc",
-              sparkline: false,
-            },
-            signal: controller.signal,
-          }
-        );
-
-        setCryptoData(extraResponse.data);
-        setCount(extraResponse.data.length);
-
-        await sleep(delayPerRequest);
-        
-        // 2. Fetch paginated market data (top 4500)
+        // 1. Fetch paginated market data (top 4500)
         for (let currentPage = 1; currentPage <= pageCount; currentPage++) {
           await sleep(delayPerRequest);
           const pageResponse = await axios.get(
@@ -107,6 +84,26 @@ const Home = () => {
           setCryptoData((prev) => [...prev, ...pageResponse.data]);
           setCount((prev) => prev + pageResponse.data.length);
         }
+
+        // 2. Wait before fetching extra coins
+        await sleep(delayPerRequest);
+
+        // 3. Fetch extra coins
+        const extraResponse = await axios.get(
+          "https://api.coingecko.com/api/v3/coins/markets",
+          {
+            params: {
+              vs_currency: "usd",
+              ids: extraCoinIds.join(","),
+              order: "market_cap_desc",
+              sparkline: false,
+            },
+            signal: controller.signal,
+          }
+        );
+
+        setCryptoData((prev) => [...prev, ...extraResponse.data]);
+        setCount((prev) => prev + extraResponse.data.length);
 
         clearInterval(countdownInterval.current);
         setCountdown(0);
@@ -152,7 +149,7 @@ const Home = () => {
         <tbody>
           {cryptoData.map((crypto, index) => (
             <tr key={`${crypto.id}-${index}`}>
-              <td>{index + 1}</td>
+              <td>{crypto.market_cap_rank ?? {index + 1}</td>
               <td>{crypto.name}</td>
               <td>{crypto.symbol.toUpperCase()}</td>
               <td>${toDecimalString(crypto.current_price)}</td>
