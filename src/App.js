@@ -6,12 +6,12 @@ const countPerPage = 250;
 const delayPerRequest = 11500;
 
 const extraCoinIds = [
-  "boson-protocol",      // BOSON
-  "capybara-nation",     // BARA
-  "buy-the-dip",         // DIP
-  "levva-protocol",      // LVVA
-  "space-and-time",      // SXT
-  "crob-coin",           // CROB
+  "boson-protocol",       // BOSON
+  "capybara-nation",      // BARA
+  "buy-the-dip",          // DIP
+  "levva-protocol",       // LVVA
+  "space-and-time",       // SXT
+  "cropto-barley-token",  // CROB
 ];
 
 const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
@@ -34,13 +34,14 @@ const formatTime = (seconds) => {
 const Home = () => {
   const [cryptoData, setCryptoData] = useState([]);
   const [count, setCount] = useState(0);
+  const [page, setPage] = useState(1);
   const [countdown, setCountdown] = useState(0);
   const [error, setError] = useState(null);
   const countdownInterval = useRef(null);
   const endTime = useRef(null);
 
   useEffect(() => {
-    const estimatedTime = (pageCount + 1) * delayPerRequest + 3000;
+    const estimatedTime = (pageCount - 1) * delayPerRequest + 7000;
     endTime.current = Date.now() + estimatedTime;
 
     countdownInterval.current = setInterval(() => {
@@ -54,9 +55,7 @@ const Home = () => {
       }
     }, 1000);
 
-    return () => {
-      clearInterval(countdownInterval.current);
-    };
+    return () => clearInterval(countdownInterval.current);
   }, []);
 
   useEffect(() => {
@@ -64,73 +63,74 @@ const Home = () => {
 
     const fetchCryptoData = async () => {
       try {
-        // 1. Fetch paginated market data (top 4500)
-        for (let currentPage = 1; currentPage <= pageCount; currentPage++) {
-          await sleep(delayPerRequest);
-          const pageResponse = await axios.get(
-            "https://api.coingecko.com/api/v3/coins/markets",
-            {
-              params: {
-                vs_currency: "usd",
-                order: "market_cap_desc",
-                per_page: countPerPage,
-                page: currentPage,
-                sparkline: false,
-              },
-              signal: controller.signal,
-            }
-          );
-
-          setCryptoData((prev) => [...prev, ...pageResponse.data]);
-          setCount((prev) => prev + pageResponse.data.length);
-        }
-
-        // 2. Wait before fetching extra coins
-        await sleep(delayPerRequest);
-
-        // 3. Fetch extra coins
-        const extraResponse = await axios.get(
+        const response = await axios.get(
           "https://api.coingecko.com/api/v3/coins/markets",
           {
             params: {
               vs_currency: "usd",
-              ids: extraCoinIds.join(","),
               order: "market_cap_desc",
+              per_page: countPerPage,
+              page,
               sparkline: false,
             },
             signal: controller.signal,
           }
         );
 
-        setCryptoData((prev) => [...prev, ...extraResponse.data]);
-        setCount((prev) => prev + extraResponse.data.length);
+        setCryptoData((prevData) => [...prevData, ...response.data]);
+        setCount((prevCount) => prevCount + countPerPage);
 
-        clearInterval(countdownInterval.current);
-        setCountdown(0);
+        if (page < pageCount) {
+          await sleep(delayPerRequest);
+          setPage((prevPage) => prevPage + 1);
+        } else {
+          await sleep(delayPerRequest);
+          await fetchExtraCoins(); // fetch extra coin data
+          clearInterval(countdownInterval.current);
+          setCountdown(0);
+        }
       } catch (err) {
         if (axios.isCancel(err)) {
           console.log("Request canceled:", err.message);
         } else {
           console.error("Error fetching crypto data:", err);
           setError("Error fetching data. Please try again later.");
+          setCryptoData([]);
           clearInterval(countdownInterval.current);
         }
       }
     };
 
-    fetchCryptoData();
-
-    return () => {
-      controller.abort();
+    const fetchExtraCoins = async () => {
+      try {
+        const response = await axios.get(
+          "https://api.coingecko.com/api/v3/coins/markets",
+          {
+            params: {
+              vs_currency: "usd",
+              ids: extraCoinIds.join(","),
+              sparkline: false,
+            },
+          }
+        );
+        setCryptoData((prevData) => [...prevData, ...response.data]);
+        setCount((prevCount) => prevCount + response.data.length);
+      } catch (err) {
+        console.error("Error fetching extra coins:", err);
+      }
     };
-  }, []);
+
+    fetchCryptoData();
+    return () => controller.abort();
+  }, [page]);
 
   return (
     <div>
       {error && <p style={{ color: "red" }}>{error}</p>}
-      {countdown > 0 && (
+      {page < pageCount && (
         <p aria-live="polite">
-          Fetching data... {count} loaded... {formatTime(countdown)} minutes left ⏳
+          Loading top {pageCount * countPerPage} results... {count} loaded...{" "}
+          {formatTime(countdown)} minutes left. ⏳
         </p>
       )}
 
@@ -148,7 +148,7 @@ const Home = () => {
         </thead>
         <tbody>
           {cryptoData.map((crypto, index) => (
-            <tr key={`${crypto.id}-${index}`}>
+            <tr key={crypto.id}>
               <td>{crypto.market_cap_rank ?? index + 1}</td>
               <td>{crypto.name}</td>
               <td>{crypto.symbol.toUpperCase()}</td>
