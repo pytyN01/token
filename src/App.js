@@ -43,7 +43,7 @@ const Home = () => {
   const endTime = useRef(null);
 
   useEffect(() => {
-    const estimatedTime = (pageCount - 1) * delayPerRequest + 9000;
+    const estimatedTime = (pageCount - 1) * delayPerRequest + 15000;
     endTime.current = Date.now() + estimatedTime;
 
     countdownInterval.current = setInterval(() => {
