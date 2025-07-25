@@ -5,6 +5,19 @@ const pageCount = 18;
 const countPerPage = 250;
 const delayPerRequest = 11500;
 
+const extraCoinIds = [
+  "boson-protocol",      // BOSON
+  "myro",                // MYRO
+  "neiro-ethereum",      // NEIROETH
+  "space-and-time",      // SXT
+  "scroll",              // SCROLL
+  "capybara-nation",     // BARA
+  "levva-protocol",      // LVVA
+  "crob",                // CROB
+  "buy-the-dip",         // DIP
+  "crow",                // CAW
+];
+
 const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
 
 const toDecimalString = (num) => {
@@ -25,14 +38,13 @@ const formatTime = (seconds) => {
 const Home = () => {
   const [cryptoData, setCryptoData] = useState([]);
   const [count, setCount] = useState(0);
-  const [page, setPage] = useState(1);
   const [countdown, setCountdown] = useState(0);
   const [error, setError] = useState(null);
   const countdownInterval = useRef(null);
   const endTime = useRef(null);
 
   useEffect(() => {
-    const estimatedTime = (pageCount - 1) * delayPerRequest + 7000;
+    const estimatedTime = (pageCount + 1) * delayPerRequest + 3000;
     endTime.current = Date.now() + estimatedTime;
 
     countdownInterval.current = setInterval(() => {
@@ -56,37 +68,54 @@ const Home = () => {
 
     const fetchCryptoData = async () => {
       try {
-        const response = await axios.get(
+        // 1. Fetch extra coins first
+        const extraResponse = await axios.get(
           "https://api.coingecko.com/api/v3/coins/markets",
           {
             params: {
               vs_currency: "usd",
+              ids: extraCoinIds.join(","),
               order: "market_cap_desc",
-              per_page: countPerPage,
-              page,
               sparkline: false,
             },
             signal: controller.signal,
           }
         );
 
-        setCryptoData((prevData) => [...prevData, ...response.data]);
-        setCount((prevCount) => prevCount + countPerPage);
+        setCryptoData(extraResponse.data);
+        setCount(extraResponse.data.length);
 
-        if (page < pageCount) {
+        await sleep(delayPerRequest);
+        
+        // 2. Fetch paginated market data (top 4500)
+        for (let currentPage = 1; currentPage <= pageCount; currentPage++) {
           await sleep(delayPerRequest);
-          setPage((prevPage) => prevPage + 1);
-        } else {
-          clearInterval(countdownInterval.current);
-          setCountdown(0);
+          const pageResponse = await axios.get(
+            "https://api.coingecko.com/api/v3/coins/markets",
+            {
+              params: {
+                vs_currency: "usd",
+                order: "market_cap_desc",
+                per_page: countPerPage,
+                page: currentPage,
+                sparkline: false,
+              },
+              signal: controller.signal,
+            }
+          );
+
+          setCryptoData((prev) => [...prev, ...pageResponse.data]);
+          setCount((prev) => prev + pageResponse.data.length);
         }
+
+        clearInterval(countdownInterval.current);
+        setCountdown(0);
       } catch (err) {
         if (axios.isCancel(err)) {
           console.log("Request canceled:", err.message);
         } else {
           console.error("Error fetching crypto data:", err);
           setError("Error fetching data. Please try again later.");
-          setCryptoData([]);
           clearInterval(countdownInterval.current);
         }
       }
@@ -97,15 +126,14 @@ const Home = () => {
     return () => {
       controller.abort();
     };
-  }, [page]);
+  }, []);
 
   return (
     <div>
       {error && <p style={{ color: "red" }}>{error}</p>}
-      {page < pageCount && (
+      {countdown > 0 && (
         <p aria-live="polite">
-          Loading top {pageCount * countPerPage} results... {count} loaded...{" "}
-          {formatTime(countdown)} minutes left. ⏳
+          Fetching data... {count} loaded... {formatTime(countdown)} minutes left ⏳
         </p>
       )}
 
@@ -123,7 +151,7 @@ const Home = () => {
         </thead>
         <tbody>
           {cryptoData.map((crypto, index) => (
-            <tr key={crypto.id}>
+            <tr key={`${crypto.id}-${index}`}>
               <td>{index + 1}</td>
               <td>{crypto.name}</td>
               <td>{crypto.symbol.toUpperCase()}</td>
