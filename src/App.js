@@ -149,7 +149,7 @@ const Home = () => {
         <tbody>
           {cryptoData.map((crypto, index) => (
             <tr key={`${crypto.id}-${index}`}>
-              <td>{crypto.market_cap_rank ?? {index + 1}</td>
+              <td>{crypto.market_cap_rank ?? index + 1}</td>
               <td>{crypto.name}</td>
               <td>{crypto.symbol.toUpperCase()}</td>
               <td>${toDecimalString(crypto.current_price)}</td>
