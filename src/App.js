@@ -8,10 +8,12 @@ const delayPerRequest = 11500;
 const extraCoinIds = [
   "boson-protocol",       // BOSON
   "capybara-nation",      // BARA
-  "buy-the-dip",          // DIP
+  "senor-dip",            // DIP
   "levva-protocol",       // LVVA
   "space-and-time",       // SXT
   "cropto-barley-token",  // CROB
+  "crob-coin",            // CROB
+
 ];
 
 const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
@@ -41,7 +43,7 @@ const Home = () => {
   const endTime = useRef(null);
 
   useEffect(() => {
-    const estimatedTime = (pageCount - 1) * delayPerRequest + 7000;
+    const estimatedTime = (pageCount - 1) * delayPerRequest + 9000;
     endTime.current = Date.now() + estimatedTime;
 
     countdownInterval.current = setInterval(() => {
