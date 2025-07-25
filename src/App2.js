@@ -60,7 +60,7 @@ const Home = () => {
         const batch = pages.slice(i, i + maxConcurrent);
         const batchResults = await Promise.all(
           batch.map((page) =>
-            axios.get("https://api.coingecko.com/api/v3/coins/markets", {
+            axios.get("https://cors-anywhere.herokuapp.com/https://api.coingecko.com/api/v3/coins/markets", {
               params: {
                 vs_currency: "usd",
                 order: "market_cap_desc",
