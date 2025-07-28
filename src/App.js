@@ -13,7 +13,6 @@ const extraCoinIds = [
   "space-and-time",       // SXT
   "cropto-barley-token",  // CROB
   "crob-coin",            // CROB
-
 ];
 
 const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
@@ -39,6 +38,8 @@ const Home = () => {
   const [page, setPage] = useState(1);
   const [countdown, setCountdown] = useState(0);
   const [error, setError] = useState(null);
+  const [doneLoadingAll, setDoneLoadingAll] = useState(false);
+
   const countdownInterval = useRef(null);
   const endTime = useRef(null);
 
@@ -52,9 +53,6 @@ const Home = () => {
         0
       );
       setCountdown(remaining);
-      if (remaining <= 0) {
-        clearInterval(countdownInterval.current);
-      }
     }, 1000);
 
     return () => clearInterval(countdownInterval.current);
@@ -87,9 +85,10 @@ const Home = () => {
           setPage((prevPage) => prevPage + 1);
         } else {
           await sleep(delayPerRequest);
-          await fetchExtraCoins(); // fetch extra coin data
+          await fetchExtraCoins(); // wait for extra coins
           clearInterval(countdownInterval.current);
           setCountdown(0);
+          setDoneLoadingAll(true); // ✅ Countdown DOM will hide now
         }
       } catch (err) {
         if (axios.isCancel(err)) {
@@ -129,10 +128,10 @@ const Home = () => {
   return (
     <div>
       {error && <p style={{ color: "red" }}>{error}</p>}
-      {page < pageCount && (
+      {!doneLoadingAll && (
         <p aria-live="polite">
-          Loading top {pageCount * countPerPage} results... {count} loaded...{" "}
-          {formatTime(countdown)} minutes left. ⏳
+          Loading top {pageCount * countPerPage + extraCoinIds.length} results...{" "}
+          {count} loaded... {formatTime(countdown)} minutes left. ⏳
         </p>
       )}
 
