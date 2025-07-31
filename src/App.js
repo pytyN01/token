@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
 
-const pageCount = 8;
+const pageCount = 12;
 const countPerPage = 250;
 const delayPerRequest = 11500;
+const extraCoinRequest = 15000;
 
 const extraCoinIds = [
   "boson-protocol",       // BOSON
@@ -15,12 +16,6 @@ const extraCoinIds = [
   "crob-coin",            // CROB
   "lybra-finance",        // LBR
   "sudoswap",             // SUDO
-  "shiden-network",       // SDN
-  "subquery-network",     // SQT
-  "derace",               // ZERC
-  "mxc",                  // MXC
-  "juno",                 // JUNO
-  "step-app",             // FITFI
 ];
 
 const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
@@ -52,7 +47,7 @@ const Home = () => {
   const endTime = useRef(null);
 
   useEffect(() => {
-    const estimatedTime = (pageCount - 1) * delayPerRequest + delayPerRequest;
+    const estimatedTime = (pageCount - 1) * delayPerRequest + extraCoinRequest;
     endTime.current = Date.now() + estimatedTime;
 
     countdownInterval.current = setInterval(() => {
