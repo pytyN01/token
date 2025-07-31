@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
 
-const pageCount = 18;
+const pageCount = 12;
 const countPerPage = 250;
 const delayPerRequest = 11500;
 
@@ -13,6 +13,8 @@ const extraCoinIds = [
   "space-and-time",       // SXT
   "cropto-barley-token",  // CROB
   "crob-coin",            // CROB
+  "lybra-finance",        // LBR
+  "sudoswap",             // SUDO
 ];
 
 const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
@@ -44,7 +46,7 @@ const Home = () => {
   const endTime = useRef(null);
 
   useEffect(() => {
-    const estimatedTime = (pageCount - 1) * delayPerRequest + 19000;
+    const estimatedTime = (pageCount - 1) * delayPerRequest + 16000;
     endTime.current = Date.now() + estimatedTime;
 
     countdownInterval.current = setInterval(() => {
