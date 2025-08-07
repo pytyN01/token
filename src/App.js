@@ -3,7 +3,7 @@ import axios from "axios";
 
 const pageCount = 12;
 const countPerPage = 250;
-const delayPerRequest = 11500;
+const delayPerRequest = 12000;
 const extraCoinRequest = 15000;
 
 const extraCoinIds = [
