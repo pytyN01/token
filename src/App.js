@@ -5,7 +5,7 @@ const pageCount = 12;
 const countPerPage = 250;
 const delayPerRequest = 12000;
 const extraCoinRequest = 15000;
-const cascadeDelay = 50;  // (30 faster, 80 slower)
+const cascadeDelay = 100;  // (50 faster, 200 slower)
 
 const extraCoinIds = [
   "boson-protocol",       // BOSON
