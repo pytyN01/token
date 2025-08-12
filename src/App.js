@@ -21,7 +21,7 @@ const extraCoinIds = [
 // Tune these:
 const cascadeDelay = 150; // ms between each row in a batch
 const maxCascadeTotalDelay = 37500; // cap total per-batch delay so rows aren't hidden for ages
-const animationDuration = 37500; // animation duration in ms
+const animationDuration = 300; // animation duration in ms
 
 const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
 
