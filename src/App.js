@@ -5,6 +5,7 @@ const pageCount = 12;
 const countPerPage = 250;
 const delayPerRequest = 12000;
 const extraCoinRequest = 15000;
+const cascadeDelay = 50;  // (30 faster, 80 slower)
 
 const extraCoinIds = [
   "boson-protocol",       // BOSON
@@ -152,7 +153,13 @@ const Home = () => {
         </thead>
         <tbody>
           {cryptoData.map((crypto, index) => (
-            <tr key={crypto.id}>
+            <tr
+              key={crypto.id}
+              className="fade-row"
+              style={{
+                animationDelay: `${index * cascadeDelay}ms`,
+              }}
+            >
               <td>{crypto.market_cap_rank ?? index + 1}</td>
               <td>{crypto.name}</td>
               <td>{crypto.symbol.toUpperCase()}</td>
