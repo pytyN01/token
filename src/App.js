@@ -5,8 +5,6 @@ const pageCount = 12;
 const countPerPage = 250;
 const delayPerRequest = 12000;
 const extraCoinRequest = 18000;
-const totalRows = pageCount * countPerPage + 9; // 3009 rows
-const animationDuration = 149000; // 2:29 minutes in ms
 
 const extraCoinIds = [
   "boson-protocol",       // BOSON
@@ -44,14 +42,10 @@ const Home = () => {
   const [countdown, setCountdown] = useState(0);
   const [error, setError] = useState(null);
   const [doneLoadingAll, setDoneLoadingAll] = useState(false);
-  const [visibleRows, setVisibleRows] = useState(0);
 
   const countdownInterval = useRef(null);
-  const animationInterval = useRef(null);
   const endTime = useRef(null);
-  const startTime = useRef(null);
 
-  // Countdown timer
   useEffect(() => {
     const estimatedTime = (pageCount - 1) * delayPerRequest + extraCoinRequest;
     endTime.current = Date.now() + estimatedTime;
@@ -64,39 +58,9 @@ const Home = () => {
       setCountdown(remaining);
     }, 1000);
 
-    return () => {
-      if (countdownInterval.current) {
-        clearInterval(countdownInterval.current);
-      }
-    };
+    return () => clearInterval(countdownInterval.current);
   }, []);
 
-  // Start animation timer when first data arrives
-  useEffect(() => {
-    if (cryptoData.length > 0 && !startTime.current) {
-      startTime.current = Date.now();
-      
-      animationInterval.current = setInterval(() => {
-        const elapsed = Date.now() - startTime.current;
-        const progress = Math.min(1, elapsed / animationDuration);
-        const target = Math.floor(progress * totalRows);
-        
-        setVisibleRows(target);
-        
-        if (progress >= 1) {
-          clearInterval(animationInterval.current);
-        }
-      }, 100);
-    }
-    
-    return () => {
-      if (animationInterval.current) {
-        clearInterval(animationInterval.current);
-      }
-    };
-  }, [cryptoData.length]);
-
-  // Data fetching
   useEffect(() => {
     const controller = new AbortController();
 
@@ -116,13 +80,7 @@ const Home = () => {
           }
         );
 
-        // Add new data with unique keys
-        const newData = response.data.map((item, i) => ({
-          ...item,
-          uniqueKey: `${page}-${i}`
-        }));
-
-        setCryptoData((prevData) => [...prevData, ...newData]);
+        setCryptoData((prevData) => [...prevData, ...response.data]);
         setCount((prevCount) => prevCount + countPerPage);
 
         if (page < pageCount) {
@@ -159,13 +117,7 @@ const Home = () => {
             },
           }
         );
-        
-        const extraData = response.data.map((item, i) => ({
-          ...item,
-          uniqueKey: `extra-${i}`
-        }));
-        
-        setCryptoData((prevData) => [...prevData, ...extraData]);
+        setCryptoData((prevData) => [...prevData, ...response.data]);
         setCount((prevCount) => prevCount + response.data.length);
       } catch (err) {
         console.error("Error fetching extra coins:", err);
@@ -181,8 +133,8 @@ const Home = () => {
       {error && <p style={{ color: "red" }}>{error}</p>}
       {!doneLoadingAll && (
         <p aria-live="polite">
-          Loading top {totalRows} results...{" "}
-          {count} loaded, {Math.min(visibleRows, cryptoData.length)} displayed... {formatTime(countdown)} left. ⏳
+          Loading top {pageCount * countPerPage + extraCoinIds.length} results...{" "}
+          {count} loaded... {formatTime(countdown)} minutes left. ⏳
         </p>
       )}
 
@@ -199,12 +151,8 @@ const Home = () => {
           </tr>
         </thead>
         <tbody>
-          {cryptoData.slice(0, Math.min(visibleRows, cryptoData.length)).map((crypto, index) => (
-            <tr 
-              key={crypto.uniqueKey}
-              className="fade-row"
-              style={{ animationDelay: `${(index % 20) * 30}ms` }}
-            >
+          {cryptoData.map((crypto, index) => (
+            <tr key={crypto.id}>
               <td>{crypto.market_cap_rank ?? index + 1}</td>
               <td>{crypto.name}</td>
               <td>{crypto.symbol.toUpperCase()}</td>
@@ -216,17 +164,6 @@ const Home = () => {
           ))}
         </tbody>
       </table>
-
-      <style>{`
-        @keyframes fadeInRow {
-          0% { opacity: 0; transform: translateY(5px); }
-          100% { opacity: 1; transform: translateY(0); }
-        }
-        .fade-row {
-          opacity: 0;
-          animation: fadeInRow 0.5s ease forwards;
-        }
-      `}</style>
     </div>
   );
 };
