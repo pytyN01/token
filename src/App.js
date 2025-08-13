@@ -5,6 +5,8 @@ const pageCount = 12;
 const countPerPage = 250;
 const delayPerRequest = 12000;
 const extraCoinRequest = 15000;
+const totalExpectedRows = 3007; // Hardcoded to 3007 rows
+const estimatedFetchTime = 145000; // 2:25 minutes in milliseconds
 
 const extraCoinIds = [
   "boson-protocol", "capybara-nation", "senor-dip", "levva-protocol",
@@ -37,7 +39,7 @@ const Home = () => {
 
   const countdownInterval = useRef(null);
   const endTime = useRef(null);
-  const rowDelayRef = useRef(48); // start at 30ms
+  const rowDelay = Math.floor(estimatedFetchTime / totalExpectedRows); // ~48ms per row
 
   // Countdown timer
   useEffect(() => {
@@ -77,8 +79,7 @@ const Home = () => {
             }
           );
           allData = [...allData, ...response.data];
-          setCryptoData([...allData]); // update immediately
-          rowDelayRef.current = Math.max(1, rowDelayRef.current - 4);
+          setCryptoData([...allData]);
           await sleep(delayPerRequest);
         }
 
@@ -123,17 +124,17 @@ const Home = () => {
           clearInterval(interval);
           return prev;
         });
-      }, rowDelayRef.current); // 50ms between rows
+      }, rowDelay);
       return () => clearInterval(interval);
     }
-  }, [cryptoData]);
+  }, [cryptoData, rowDelay]);
 
   return (
     <div>
       {error && <p style={{ color: "red" }}>{error}</p>}
       {!doneLoadingAll && (
         <p aria-live="polite">
-          Loading top {pageCount * countPerPage + extraCoinIds.length} results...{" "}
+          Loading top {totalExpectedRows} results...{" "}
           {visibleCount} loaded... {formatTime(countdown)} minutes left. ⏳
         </p>
       )}
@@ -152,7 +153,7 @@ const Home = () => {
         </thead>
         <tbody>
           {cryptoData.slice(0, visibleCount).map((crypto, index) => (
-            <tr key={crypto.id} className="fade-row">
+            <tr key={crypto.id} className="fade-row" style={{ animationDelay: `${index * rowDelay}ms` }}>
               <td>{crypto.market_cap_rank ?? index + 1}</td>
               <td>{crypto.name}</td>
               <td>{crypto.symbol.toUpperCase()}</td>
