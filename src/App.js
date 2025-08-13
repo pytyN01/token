@@ -5,8 +5,8 @@ const pageCount = 12;
 const countPerPage = 250;
 const delayPerRequest = 12000;
 const extraCoinRequest = 18000;
-const totalRows = 3007; // Hardcoded total rows
-const totalAnimationTime = 149000; // 2:26 minutes in ms
+const totalRows = pageCount * countPerPage + 9; // 3009 rows
+const animationDuration = 149000; // 2:29 minutes in ms
 
 const extraCoinIds = [
   "boson-protocol",       // BOSON
@@ -49,8 +49,7 @@ const Home = () => {
   const countdownInterval = useRef(null);
   const animationInterval = useRef(null);
   const endTime = useRef(null);
-  const animationStartTime = useRef(null);
-  const rowDelay = totalAnimationTime / totalRows; // ~48.5ms per row
+  const startTime = useRef(null);
 
   // Countdown timer
   useEffect(() => {
@@ -65,27 +64,29 @@ const Home = () => {
       setCountdown(remaining);
     }, 1000);
 
-    return () => clearInterval(countdownInterval.current);
+    return () => {
+      if (countdownInterval.current) {
+        clearInterval(countdownInterval.current);
+      }
+    };
   }, []);
 
   // Start animation timer when first data arrives
   useEffect(() => {
-    if (cryptoData.length > 0 && !animationStartTime.current) {
-      animationStartTime.current = Date.now();
+    if (cryptoData.length > 0 && !startTime.current) {
+      startTime.current = Date.now();
       
       animationInterval.current = setInterval(() => {
-        const elapsed = Date.now() - animationStartTime.current;
-        const target = Math.min(
-          Math.floor(elapsed / rowDelay),
-          totalRows
-        );
+        const elapsed = Date.now() - startTime.current;
+        const progress = Math.min(1, elapsed / animationDuration);
+        const target = Math.floor(progress * totalRows);
         
         setVisibleRows(target);
         
-        if (target >= totalRows) {
+        if (progress >= 1) {
           clearInterval(animationInterval.current);
         }
-      }, 50); // Update every 50ms for smooth progression
+      }, 100);
     }
     
     return () => {
@@ -115,7 +116,13 @@ const Home = () => {
           }
         );
 
-        setCryptoData((prevData) => [...prevData, ...response.data]);
+        // Add new data with unique keys
+        const newData = response.data.map((item, i) => ({
+          ...item,
+          uniqueKey: `${page}-${i}`
+        }));
+
+        setCryptoData((prevData) => [...prevData, ...newData]);
         setCount((prevCount) => prevCount + countPerPage);
 
         if (page < pageCount) {
@@ -152,7 +159,13 @@ const Home = () => {
             },
           }
         );
-        setCryptoData((prevData) => [...prevData, ...response.data]);
+        
+        const extraData = response.data.map((item, i) => ({
+          ...item,
+          uniqueKey: `extra-${i}`
+        }));
+        
+        setCryptoData((prevData) => [...prevData, ...extraData]);
         setCount((prevCount) => prevCount + response.data.length);
       } catch (err) {
         console.error("Error fetching extra coins:", err);
@@ -169,7 +182,7 @@ const Home = () => {
       {!doneLoadingAll && (
         <p aria-live="polite">
           Loading top {totalRows} results...{" "}
-          {Math.min(visibleRows, count)} loaded... {formatTime(countdown)} minutes left. ⏳
+          {count} loaded, {Math.min(visibleRows, cryptoData.length)} displayed... {formatTime(countdown)} left. ⏳
         </p>
       )}
 
@@ -186,11 +199,11 @@ const Home = () => {
           </tr>
         </thead>
         <tbody>
-          {cryptoData.slice(0, visibleRows).map((crypto, index) => (
+          {cryptoData.slice(0, Math.min(visibleRows, cryptoData.length)).map((crypto, index) => (
             <tr 
-              key={`${crypto.id}-${index}`}
+              key={crypto.uniqueKey}
               className="fade-row"
-              style={{ animationDelay: `${index * 50}ms` }}
+              style={{ animationDelay: `${(index % 20) * 30}ms` }}
             >
               <td>{crypto.market_cap_rank ?? index + 1}</td>
               <td>{crypto.name}</td>
@@ -211,7 +224,7 @@ const Home = () => {
         }
         .fade-row {
           opacity: 0;
-          animation: fadeInRow 0.4s ease forwards;
+          animation: fadeInRow 0.5s ease forwards;
         }
       `}</style>
     </div>
