@@ -5,7 +5,6 @@ const pageCount = 12;
 const countPerPage = 250;
 const delayPerRequest = 12000;
 const extraCoinRequest = 15000;
-const rowDelayRef = useRef(30); // start at 30ms
 
 const extraCoinIds = [
   "boson-protocol", "capybara-nation", "senor-dip", "levva-protocol",
@@ -38,6 +37,7 @@ const Home = () => {
 
   const countdownInterval = useRef(null);
   const endTime = useRef(null);
+  const rowDelayRef = useRef(30); // start at 30ms
 
   // Countdown timer
   useEffect(() => {
