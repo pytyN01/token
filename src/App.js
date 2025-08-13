@@ -7,15 +7,15 @@ const delayPerRequest = 12000;
 const extraCoinRequest = 15000;
 
 const extraCoinIds = [
-  "boson-protocol",       // BOSON
-  "capybara-nation",      // BARA
-  "senor-dip",            // DIP
-  "levva-protocol",       // LVVA
-  "space-and-time",       // SXT
-  "cropto-barley-token",  // CROB
-  "crob-coin",            // CROB
-  "lybra-finance",        // LBR
-  "sudoswap",             // SUDO
+  "boson-protocol", // BOSON
+  "capybara-nation", // BARA
+  "senor-dip", // DIP
+  "levva-protocol", // LVVA
+  "space-and-time", // SXT
+  "cropto-barley-token", // CROB
+  "crob-coin", // CROB
+  "lybra-finance", // LBR
+  "sudoswap", // SUDO
 ];
 
 const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
@@ -133,8 +133,8 @@ const Home = () => {
       {error && <p style={{ color: "red" }}>{error}</p>}
       {!doneLoadingAll && (
         <p aria-live="polite">
-          Loading top {pageCount * countPerPage + extraCoinIds.length} results...{" "}
-          {count} loaded... {formatTime(countdown)} minutes left. ⏳
+          Loading top {pageCount * countPerPage + extraCoinIds.length}{" "}
+          results... {count} loaded... {formatTime(countdown)} minutes left. ⏳
         </p>
       )}
 
@@ -152,7 +152,11 @@ const Home = () => {
         </thead>
         <tbody>
           {cryptoData.map((crypto, index) => (
-            <tr key={crypto.id}>
+            <tr
+              key={crypto.id}
+              className="fade-row"
+              style={{ animationDelay: `${index * 50}ms` }} // 50ms between rows
+            >
               <td>{crypto.market_cap_rank ?? index + 1}</td>
               <td>{crypto.name}</td>
               <td>{crypto.symbol.toUpperCase()}</td>
