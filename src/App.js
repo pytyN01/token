@@ -121,7 +121,7 @@ const Home = () => {
           clearInterval(interval);
           return prev;
         });
-      }, 50); // 50ms between rows
+      }, 15); // 50ms between rows
       return () => clearInterval(interval);
     }
   }, [cryptoData]);
@@ -170,7 +170,7 @@ const Home = () => {
         }
         .fade-row {
           opacity: 0;
-          animation: fadeInRow 0.5s ease forwards;
+          animation: fadeInRow 1s ease forwards;
         }
       `}</style>
     </div>
