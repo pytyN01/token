@@ -7,15 +7,8 @@ const delayPerRequest = 12000;
 const extraCoinRequest = 15000;
 
 const extraCoinIds = [
-  "boson-protocol", // BOSON
-  "capybara-nation", // BARA
-  "senor-dip", // DIP
-  "levva-protocol", // LVVA
-  "space-and-time", // SXT
-  "cropto-barley-token", // CROB
-  "crob-coin", // CROB
-  "lybra-finance", // LBR
-  "sudoswap", // SUDO
+  "boson-protocol", "capybara-nation", "senor-dip", "levva-protocol",
+  "space-and-time", "cropto-barley-token", "crob-coin", "lybra-finance", "sudoswap"
 ];
 
 const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
@@ -37,8 +30,7 @@ const formatTime = (seconds) => {
 
 const Home = () => {
   const [cryptoData, setCryptoData] = useState([]);
-  const [count, setCount] = useState(0);
-  const [page, setPage] = useState(1);
+  const [visibleCount, setVisibleCount] = useState(0);
   const [countdown, setCountdown] = useState(0);
   const [error, setError] = useState(null);
   const [doneLoadingAll, setDoneLoadingAll] = useState(false);
@@ -46,6 +38,7 @@ const Home = () => {
   const countdownInterval = useRef(null);
   const endTime = useRef(null);
 
+  // Countdown timer
   useEffect(() => {
     const estimatedTime = (pageCount - 1) * delayPerRequest + extraCoinRequest;
     endTime.current = Date.now() + estimatedTime;
@@ -61,53 +54,34 @@ const Home = () => {
     return () => clearInterval(countdownInterval.current);
   }, []);
 
+  // Fetch all data in the background
   useEffect(() => {
     const controller = new AbortController();
 
-    const fetchCryptoData = async () => {
+    const fetchData = async () => {
       try {
-        const response = await axios.get(
-          "https://api.coingecko.com/api/v3/coins/markets",
-          {
-            params: {
-              vs_currency: "usd",
-              order: "market_cap_desc",
-              per_page: countPerPage,
-              page,
-              sparkline: false,
-            },
-            signal: controller.signal,
-          }
-        );
-
-        setCryptoData((prevData) => [...prevData, ...response.data]);
-        setCount((prevCount) => prevCount + countPerPage);
-
-        if (page < pageCount) {
+        let allData = [];
+        for (let p = 1; p <= pageCount; p++) {
+          const response = await axios.get(
+            "https://api.coingecko.com/api/v3/coins/markets",
+            {
+              params: {
+                vs_currency: "usd",
+                order: "market_cap_desc",
+                per_page: countPerPage,
+                page: p,
+                sparkline: false,
+              },
+              signal: controller.signal,
+            }
+          );
+          allData = [...allData, ...response.data];
+          setCryptoData([...allData]); // update immediately
           await sleep(delayPerRequest);
-          setPage((prevPage) => prevPage + 1);
-        } else {
-          await sleep(delayPerRequest);
-          await fetchExtraCoins();
-          clearInterval(countdownInterval.current);
-          setCountdown(0);
-          setDoneLoadingAll(true);
         }
-      } catch (err) {
-        if (axios.isCancel(err)) {
-          console.log("Request canceled:", err.message);
-        } else {
-          console.error("Error fetching crypto data:", err);
-          setError("Error fetching data. Please try again later.");
-          setCryptoData([]);
-          clearInterval(countdownInterval.current);
-        }
-      }
-    };
 
-    const fetchExtraCoins = async () => {
-      try {
-        const response = await axios.get(
+        // Fetch extra coins
+        const extraResponse = await axios.get(
           "https://api.coingecko.com/api/v3/coins/markets",
           {
             params: {
@@ -117,24 +91,48 @@ const Home = () => {
             },
           }
         );
-        setCryptoData((prevData) => [...prevData, ...response.data]);
-        setCount((prevCount) => prevCount + response.data.length);
+        allData = [...allData, ...extraResponse.data];
+        setCryptoData([...allData]);
+
+        clearInterval(countdownInterval.current);
+        setCountdown(0);
+        setDoneLoadingAll(true);
+
       } catch (err) {
-        console.error("Error fetching extra coins:", err);
+        if (!axios.isCancel(err)) {
+          console.error("Error fetching crypto data:", err);
+          setError("Error fetching data. Please try again later.");
+          setCryptoData([]);
+          clearInterval(countdownInterval.current);
+        }
       }
     };
 
-    fetchCryptoData();
+    fetchData();
     return () => controller.abort();
-  }, [page]);
+  }, []);
+
+  // Cascading display effect
+  useEffect(() => {
+    if (cryptoData.length > 0) {
+      const interval = setInterval(() => {
+        setVisibleCount((prev) => {
+          if (prev < cryptoData.length) return prev + 1;
+          clearInterval(interval);
+          return prev;
+        });
+      }, 100); // 50ms between rows
+      return () => clearInterval(interval);
+    }
+  }, [cryptoData]);
 
   return (
     <div>
       {error && <p style={{ color: "red" }}>{error}</p>}
       {!doneLoadingAll && (
         <p aria-live="polite">
-          Loading top {pageCount * countPerPage + extraCoinIds.length}{" "}
-          results... {count} loaded... {formatTime(countdown)} minutes left. ⏳
+          Loading top {pageCount * countPerPage + extraCoinIds.length} results...{" "}
+          {visibleCount} loaded... {formatTime(countdown)} minutes left. ⏳
         </p>
       )}
 
@@ -151,12 +149,8 @@ const Home = () => {
           </tr>
         </thead>
         <tbody>
-          {cryptoData.map((crypto, index) => (
-            <tr
-              key={crypto.id}
-              className="fade-row"
-              style={{ animationDelay: `${index * 50}ms` }} // 50ms between rows
-            >
+          {cryptoData.slice(0, visibleCount).map((crypto, index) => (
+            <tr key={crypto.id} className="fade-row">
               <td>{crypto.market_cap_rank ?? index + 1}</td>
               <td>{crypto.name}</td>
               <td>{crypto.symbol.toUpperCase()}</td>
@@ -168,6 +162,17 @@ const Home = () => {
           ))}
         </tbody>
       </table>
+
+      <style>{`
+        @keyframes fadeInRow {
+          0% { opacity: 0; transform: translateY(5px); }
+          100% { opacity: 1; transform: translateY(0); }
+        }
+        .fade-row {
+          opacity: 0;
+          animation: fadeInRow 0.5s ease forwards;
+        }
+      `}</style>
     </div>
   );
 };
