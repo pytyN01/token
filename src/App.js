@@ -6,7 +6,7 @@ const countPerPage = 250;
 const delayPerRequest = 12000;
 const extraCoinRequest = 15000;
 const totalExpectedRows = 3007; // Hardcoded to 3007 rows
-const estimatedFetchTime = 145000; // 2:25 minutes in milliseconds
+const estimatedFetchTime = 146000; // 2:26 minutes in milliseconds (146,000ms)
 
 const extraCoinIds = [
   "boson-protocol", "capybara-nation", "senor-dip", "levva-protocol",
@@ -39,7 +39,7 @@ const Home = () => {
 
   const countdownInterval = useRef(null);
   const endTime = useRef(null);
-  const rowDelay = Math.floor(estimatedFetchTime / totalExpectedRows); // ~48ms per row
+  const rowDelay = 29; // Calculated for 2:26 total time (146,000ms/3007 ≈ 48.5ms)
 
   // Countdown timer
   useEffect(() => {
@@ -115,19 +115,33 @@ const Home = () => {
     return () => controller.abort();
   }, []);
 
-  // Cascading display effect
+  // Cascading display effect with dynamic speed adjustment
   useEffect(() => {
     if (cryptoData.length > 0) {
+      const batchSize = 5; // Render 5 rows at a time for smoother animation
+      const startTime = Date.now();
+      const targetEndTime = startTime + estimatedFetchTime;
+      
       const interval = setInterval(() => {
-        setVisibleCount((prev) => {
-          if (prev < cryptoData.length) return prev + 1;
-          clearInterval(interval);
-          return prev;
+        const elapsed = Date.now() - startTime;
+        const progress = elapsed / estimatedFetchTime;
+        const expectedRows = Math.min(
+          Math.floor(progress * totalExpectedRows),
+          cryptoData.length
+        );
+        
+        setVisibleCount(prev => {
+          const nextCount = Math.min(prev + batchSize, expectedRows, cryptoData.length);
+          if (nextCount >= cryptoData.length) {
+            clearInterval(interval);
+          }
+          return nextCount;
         });
-      }, rowDelay);
+      }, rowDelay * batchSize);
+      
       return () => clearInterval(interval);
     }
-  }, [cryptoData, rowDelay]);
+  }, [cryptoData]);
 
   return (
     <div>
@@ -153,7 +167,14 @@ const Home = () => {
         </thead>
         <tbody>
           {cryptoData.slice(0, visibleCount).map((crypto, index) => (
-            <tr key={crypto.id} className="fade-row" style={{ animationDelay: `${index * rowDelay}ms` }}>
+            <tr 
+              key={crypto.id} 
+              className="fade-row" 
+              style={{ 
+                animationDelay: `${Math.floor(index / 5) * rowDelay * 5}ms`,
+                animationDuration: "0.4s"
+              }}
+            >
               <td>{crypto.market_cap_rank ?? index + 1}</td>
               <td>{crypto.name}</td>
               <td>{crypto.symbol.toUpperCase()}</td>
@@ -173,7 +194,7 @@ const Home = () => {
         }
         .fade-row {
           opacity: 0;
-          animation: fadeInRow .5s ease forwards;
+          animation: fadeInRow ease forwards;
         }
       `}</style>
     </div>
