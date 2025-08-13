@@ -37,7 +37,7 @@ const Home = () => {
 
   const countdownInterval = useRef(null);
   const endTime = useRef(null);
-  const rowDelayRef = useRef(37); // start at 30ms
+  const rowDelayRef = useRef(48); // start at 30ms
 
   // Countdown timer
   useEffect(() => {
@@ -78,7 +78,7 @@ const Home = () => {
           );
           allData = [...allData, ...response.data];
           setCryptoData([...allData]); // update immediately
-          rowDelayRef.current = Math.max(1, rowDelayRef.current - 3);
+          rowDelayRef.current = Math.max(1, rowDelayRef.current - 4);
           await sleep(delayPerRequest);
         }
 
