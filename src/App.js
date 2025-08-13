@@ -5,8 +5,6 @@ const pageCount = 12;
 const countPerPage = 250;
 const delayPerRequest = 12000;
 const extraCoinRequest = 18000;
-const totalExpectedRows = 3007; // 12 pages * 250 + 9 extra coins
-const totalAnimationTime = 149000; // 2:26 minutes in ms
 
 const extraCoinIds = [
   "boson-protocol",       // BOSON
@@ -39,7 +37,6 @@ const formatTime = (seconds) => {
 
 const Home = () => {
   const [cryptoData, setCryptoData] = useState([]);
-  const [visibleRows, setVisibleRows] = useState(0);
   const [count, setCount] = useState(0);
   const [page, setPage] = useState(1);
   const [countdown, setCountdown] = useState(0);
@@ -48,13 +45,7 @@ const Home = () => {
 
   const countdownInterval = useRef(null);
   const endTime = useRef(null);
-  const animationStartTime = useRef(null);
-  const animationInterval = useRef(null);
 
-  // Calculate the delay between row appearances
-  const rowDelay = totalAnimationTime / totalExpectedRows; // ~48.5ms per row
-
-  // Countdown timer
   useEffect(() => {
     const estimatedTime = (pageCount - 1) * delayPerRequest + extraCoinRequest;
     endTime.current = Date.now() + estimatedTime;
@@ -70,7 +61,6 @@ const Home = () => {
     return () => clearInterval(countdownInterval.current);
   }, []);
 
-  // Data fetching
   useEffect(() => {
     const controller = new AbortController();
 
@@ -90,8 +80,7 @@ const Home = () => {
           }
         );
 
-        const newData = [...response.data];
-        setCryptoData((prevData) => [...prevData, ...newData]);
+        setCryptoData((prevData) => [...prevData, ...response.data]);
         setCount((prevCount) => prevCount + countPerPage);
 
         if (page < pageCount) {
@@ -139,33 +128,6 @@ const Home = () => {
     return () => controller.abort();
   }, [page]);
 
-  // Animation control
-  useEffect(() => {
-    if (cryptoData.length > 0 && !animationStartTime.current) {
-      animationStartTime.current = Date.now();
-      
-      animationInterval.current = setInterval(() => {
-        const elapsed = Date.now() - animationStartTime.current;
-        const targetVisible = Math.min(
-          Math.floor(elapsed / rowDelay),
-          cryptoData.length
-        );
-        
-        setVisibleRows(targetVisible);
-        
-        if (targetVisible >= cryptoData.length) {
-          clearInterval(animationInterval.current);
-        }
-      }, 50); // Check every 50ms for smoother progression
-    }
-
-    return () => {
-      if (animationInterval.current) {
-        clearInterval(animationInterval.current);
-      }
-    };
-  }, [cryptoData]);
-
   return (
     <div>
       {error && <p style={{ color: "red" }}>{error}</p>}
@@ -189,12 +151,8 @@ const Home = () => {
           </tr>
         </thead>
         <tbody>
-          {cryptoData.slice(0, visibleRows).map((crypto, index) => (
-            <tr 
-              key={crypto.id} 
-              className="fade-row"
-              style={{ animationDelay: `${index * rowDelay}ms` }}
-            >
+          {cryptoData.map((crypto, index) => (
+            <tr key={crypto.id}>
               <td>{crypto.market_cap_rank ?? index + 1}</td>
               <td>{crypto.name}</td>
               <td>{crypto.symbol.toUpperCase()}</td>
@@ -206,17 +164,6 @@ const Home = () => {
           ))}
         </tbody>
       </table>
-
-      <style>{`
-        @keyframes fadeInRow {
-          0% { opacity: 0; transform: translateY(10px); }
-          100% { opacity: 1; transform: translateY(0); }
-        }
-        .fade-row {
-          opacity: 0;
-          animation: fadeInRow 0.5s ease forwards;
-        }
-      `}</style>
     </div>
   );
 };
