@@ -38,6 +38,10 @@ const Home = () => {
   const countdownInterval = useRef(null);
   const endTime = useRef(null);
 
+  // This will store the current row delay in ms
+  const rowDelayRef = useRef(30);
+  const cascadeIntervalRef = useRef(null);
+
   // Countdown timer
   useEffect(() => {
     const estimatedTime = (pageCount - 1) * delayPerRequest + extraCoinRequest;
@@ -54,6 +58,19 @@ const Home = () => {
     return () => clearInterval(countdownInterval.current);
   }, []);
 
+  // Start / update the cascading display effect
+  const startCascade = () => {
+    if (cascadeIntervalRef.current) clearInterval(cascadeIntervalRef.current);
+
+    cascadeIntervalRef.current = setInterval(() => {
+      setVisibleCount((prev) => {
+        if (prev < cryptoData.length) return prev + 1;
+        clearInterval(cascadeIntervalRef.current);
+        return prev;
+      });
+    }, rowDelayRef.current);
+  };
+
   // Fetch all data in the background
   useEffect(() => {
     const controller = new AbortController();
@@ -61,6 +78,7 @@ const Home = () => {
     const fetchData = async () => {
       try {
         let allData = [];
+
         for (let p = 1; p <= pageCount; p++) {
           const response = await axios.get(
             "https://api.coingecko.com/api/v3/coins/markets",
@@ -75,8 +93,16 @@ const Home = () => {
               signal: controller.signal,
             }
           );
+
           allData = [...allData, ...response.data];
-          setCryptoData([...allData]); // update immediately
+          setCryptoData([...allData]);
+
+          // Restart cascade effect with updated delay
+          startCascade();
+
+          // Reduce row delay after each fetch (min 5 ms to avoid 0)
+          rowDelayRef.current = Math.max(5, rowDelayRef.current - 2);
+
           await sleep(delayPerRequest);
         }
 
@@ -94,6 +120,7 @@ const Home = () => {
         allData = [...allData, ...extraResponse.data];
         setCryptoData([...allData]);
 
+        startCascade();
         clearInterval(countdownInterval.current);
         setCountdown(0);
         setDoneLoadingAll(true);
@@ -109,22 +136,11 @@ const Home = () => {
     };
 
     fetchData();
-    return () => controller.abort();
+    return () => {
+      controller.abort();
+      clearInterval(cascadeIntervalRef.current);
+    };
   }, []);
-
-  // Cascading display effect
-  useEffect(() => {
-    if (cryptoData.length > 0) {
-      const interval = setInterval(() => {
-        setVisibleCount((prev) => {
-          if (prev < cryptoData.length) return prev + 1;
-          clearInterval(interval);
-          return prev;
-        });
-      }, 13); // 50ms between rows
-      return () => clearInterval(interval);
-    }
-  }, [cryptoData]);
 
   return (
     <div>
