@@ -16,6 +16,7 @@ const extraCoinIds = [
   "crob-coin",            // CROB
   "lybra-finance",        // LBR
   "sudoswap",             // SUDO
+  "subquery-network",     // SQT
 ];
 
 const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
