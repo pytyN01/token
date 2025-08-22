@@ -1,22 +1,28 @@
 import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
 
-const pageCount = 12;
+const pageCount = 8;
 const countPerPage = 250;
 const delayPerRequest = 12000;
 const extraCoinRequest = 18000;
 
 const extraCoinIds = [
-  "boson-protocol",       // BOSON
   "capybara-nation",      // BARA
-  "senor-dip",            // DIP
-  "levva-protocol",       // LVVA
-  "space-and-time",       // SXT
   "cropto-barley-token",  // CROB
   "crob-coin",            // CROB
+  "space-and-time",       // SXT
+  "levva-protocol",       // LVVA
+  "senor-dip",            // DIP
+  "boson-protocol",       // BOSON
   "lybra-finance",        // LBR
   "sudoswap",             // SUDO
   "subquery-network",     // SQT
+  "derace",               // ZERC
+  "shiden-network",       // SDN
+  "mxc",                  // MXC
+  "step-app",             // FITFI
+  "juno",                 // JUNO
+  "veno-finance-vno",     // VNO
 ];
 
 const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
