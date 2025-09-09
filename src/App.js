@@ -25,6 +25,7 @@ const extraCoinIds = [
   "veno-finance-vno",     // VNO
   "ai16z",                // AI16Z
   "tevaera",              // TEVA
+  "unibot-eth",           // UNI
 ];
 
 const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
