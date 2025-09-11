@@ -26,6 +26,7 @@ const extraCoinIds = [
   "ai16z",                // AI16Z
   "tevaera",              // TEVA
   "unibot-eth",           // UNI
+  "spark",                // SPK
 ];
 
 const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
