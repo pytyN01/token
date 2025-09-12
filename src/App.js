@@ -7,26 +7,26 @@ const delayPerRequest = 12000;
 const extraCoinRequest = 18000;
 
 const extraCoinIds = [
-  "capybara-nation",      // BARA
-  "cropto-barley-token",  // CROB
-  "crob-coin",            // CROB
-  "space-and-time",       // SXT
-  "levva-protocol",       // LVVA
-  "senor-dip",            // DIP
-  "boson-protocol",       // BOSON
-  "lybra-finance",        // LBR
-  "sudoswap",             // SUDO
-  "subquery-network",     // SQT
-  "derace",               // ZERC
-  "shiden-network",       // SDN
-  "mxc",                  // MXC
-  "step-app",             // FITFI
-  "juno",                 // JUNO
-  "veno-finance-vno",     // VNO
-  "ai16z",                // AI16Z
-  "tevaera",              // TEVA
-  "unibot-eth",           // UNI
-  "spark",                // SPK
+  "ai16z",                // 1 AI16Z
+  "boson-protocol",       // 2 BOSON
+  "levva-protocol",       // 3 LVVA
+  "tevaera",              // 4 TEVA
+  "derace",               // 5 ZERC
+  "subquery-network",     // 6 SQT
+  "mxc",                  // 7 MXC
+  "sudoswap",             // 8 SUDO
+  "lybra-finance",        // 9 LBR
+  "capybara-nation",      // 10 BARA
+  "crob-coin",            // 11 CROB
+  "cropto-barley-token",  // 11 CROB
+  "space-and-time",       // 12 SXT
+  "spark",                // 13 SPK
+  "shiden-network",       // 14 SDN
+  "senor-dip",            // 15 DIP
+  "unibot-eth",           // -- UNI
+  "veno-finance-vno",     // -- VNO
+  "juno",                 // -- JUNO
+  "step-app",             // -- FITFI
 ];
 
 const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
