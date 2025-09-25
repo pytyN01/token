@@ -7,6 +7,7 @@ const delayPerRequest = 12000;
 const extraCoinRequest = 18000;
 
 const extraCoinIds = [
+  "arena-z",
   "ai16z",                // 1 AI16Z
   "boson-protocol",       // 2 BOSON
   "levva-protocol",       // 3 LVVA
