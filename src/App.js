@@ -28,6 +28,7 @@ const extraCoinIds = [
   "veno-finance-vno",     // -- VNO
   "juno",                 // -- JUNO
   "step-app",             // -- FITFI
+  "uxlink",               // 16 UXLINK
 ];
 
 const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
