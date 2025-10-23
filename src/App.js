@@ -24,6 +24,7 @@ const extraCoinIds = [
   "spark",                // 13 SPK
   "shiden-network",       // 14 SDN
   "senor-dip",            // 15 DIP
+  "kusama"                // -- KSM
   "unibot-eth",           // -- UNI
   "veno-finance-vno",     // -- VNO
   "juno",                 // -- JUNO
