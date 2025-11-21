@@ -1,13 +1,35 @@
 import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
 
+const styles = `
+.fade-in {
+  opacity: 0;
+  transform: translateY(6px);
+  animation: fadeIn 0.4s ease forwards;
+}
+
+@keyframes fadeIn {
+  to {
+    opacity: 1;
+    transform: translateY(0px);
+  }
+}
+`;
+
+if (typeof document !== "undefined" && !document.getElementById("fadeInStyles")) {
+  const styleTag = document.createElement("style");
+  styleTag.id = "fadeInStyles";
+  styleTag.textContent = styles;
+  document.head.appendChild(styleTag);
+}
+
 const pageCount = 12;
 const countPerPage = 250;
 const delayPerRequest = 12000;
 const extraCoinRequest = 18000;
 
 const extraCoinIds = [
-  "arena-z",
+  "arena-z",              // 0 ARENAZ
   "ai16z",                // 1 AI16Z
   "boson-protocol",       // 2 BOSON
   "levva-protocol",       // 3 LVVA
@@ -146,10 +168,11 @@ const Home = () => {
   return (
     <div>
       {error && <p style={{ color: "red" }}>{error}</p>}
+
       {!doneLoadingAll && (
         <p aria-live="polite">
-          Loading top {pageCount * countPerPage + extraCoinIds.length} results...{" "}
-          {count} loaded... {formatTime(countdown)} minutes left. ⏳
+          Loading top {pageCount * countPerPage + extraCoinIds.length} results…{" "}
+          {count} loaded… {formatTime(countdown)} left. ⏳
         </p>
       )}
 
@@ -165,18 +188,27 @@ const Home = () => {
             <th>X</th>
           </tr>
         </thead>
+
         <tbody>
-          {cryptoData.map((crypto, index) => (
-            <tr key={crypto.id}>
-              <td>{crypto.market_cap_rank ?? index + 1}</td>
-              <td>{crypto.name}</td>
-              <td>{crypto.symbol.toUpperCase()}</td>
-              <td>${toDecimalString(crypto.current_price)}</td>
-              <td>${toDecimalString(crypto.ath)}</td>
-              <td>{new Date(crypto.ath_date).toLocaleDateString()}</td>
-              <td>{(crypto.ath / crypto.current_price).toFixed(2)}</td>
-            </tr>
-          ))}
+          {cryptoData.map((crypto, index) => {
+            const animate = index < 250;
+
+            return (
+              <tr
+                key={crypto.id}
+                className={animate ? "fade-in" : ""}
+                style={animate ? { animationDelay: `${index * 0.015}s` } : {}}
+              >
+                <td>{crypto.market_cap_rank ?? index + 1}</td>
+                <td>{crypto.name}</td>
+                <td>{crypto.symbol.toUpperCase()}</td>
+                <td>${toDecimalString(crypto.current_price)}</td>
+                <td>${toDecimalString(crypto.ath)}</td>
+                <td>{new Date(crypto.ath_date).toLocaleDateString()}</td>
+                <td>{(crypto.ath / crypto.current_price).toFixed(2)}</td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
