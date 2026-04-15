@@ -103,19 +103,7 @@ const Home = () => {
 
     const fetchCryptoData = async () => {
       try {
-        const response = await axios.get(
-          `/api/crypto?page=${page}`,
-          {
-            params: {
-              vs_currency: "usd",
-              order: "market_cap_desc",
-              per_page: countPerPage,
-              page,
-              sparkline: false,
-            },
-            signal: controller.signal,
-          }
-        );
+        const response = await axios.get(`/api/crypto?page=${page}`);
 
         setCryptoData((prevData) => [...prevData, ...response.data]);
         setCount((prevCount) => prevCount + countPerPage);
@@ -144,16 +132,9 @@ const Home = () => {
 
     const fetchExtraCoins = async () => {
       try {
-        const response = await axios.get(
-          `/api/crypto?page=${page}`,
-          {
-            params: {
-              vs_currency: "usd",
-              ids: extraCoinIds.join(","),
-              sparkline: false,
-            },
-          }
-        );
+        const response = await axios.get(`/api/crypto`, {
+  params: { ids: extraCoinIds.join(",") }
+})
         setCryptoData((prevData) => [...prevData, ...response.data]);
         setCount((prevCount) => prevCount + response.data.length);
       } catch (err) {
