@@ -104,7 +104,7 @@ const Home = () => {
     const fetchCryptoData = async () => {
       try {
         const response = await axios.get(
-          "https://api.allorigins.win/raw?url=https://api.coingecko.com/api/v3/coins/markets",
+          `/api/crypto?page=${page}`,
           {
             params: {
               vs_currency: "usd",
@@ -145,7 +145,7 @@ const Home = () => {
     const fetchExtraCoins = async () => {
       try {
         const response = await axios.get(
-          "https://api.allorigins.win/raw?url=https://api.coingecko.com/api/v3/coins/markets",
+          `/api/crypto?page=${page}`,
           {
             params: {
               vs_currency: "usd",
