@@ -25,8 +25,8 @@ if (typeof document !== "undefined" && !document.getElementById("fadeInStyles"))
 
 const pageCount = 12;
 const countPerPage = 250;
-const delayPerRequest = 10000;
-const extraCoinRequest = 10000;
+const delayPerRequest = 20000;
+const extraCoinRequest = 20000;
 
 const extraCoinIds = [
   "arena-z",              // 0 ARENAZ
