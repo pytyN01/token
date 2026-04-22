@@ -53,6 +53,7 @@ const extraCoinIds = [
   "juno",                 // -- JUNO
   "step-app",             // -- FITFI
   "uxlink",               // 16 UXLINK
+  "mfercoin",             // 17 MFER
 ];
 
 const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
