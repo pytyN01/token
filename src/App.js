@@ -52,6 +52,11 @@ const extraCoinIds = [
   "veno-finance-vno",     // -- VNO
   "juno",                 // -- JUNO
   "step-app",             // -- FITFI
+  "neutron",              // -- NTRN
+  "cronos-id",            // -- CROID
+  "popcat",               // -- POPCAT
+  "mog-coin",             // -- MOG
+  "alchemy-pay",          // -- ACH
   "uxlink",               // 16 UXLINK
   "mfercoin",             // 17 MFER
 ];
