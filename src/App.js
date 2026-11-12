@@ -59,6 +59,13 @@ const extraCoinIds = [
   "alchemy-pay",          // -- ACH
   "uxlink",               // 16 UXLINK
   "mfercoin",             // 17 MFER
+  "mines-of-dalarnia",
+  "myro",
+  "juno",
+  "stafi",
+  "idex",
+  "spectral",
+  "step-app",
 ];
 
 const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
