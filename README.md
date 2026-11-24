@@ -16,3 +16,6 @@ React / Create React App with a Vercel serverless endpoint at `api/crypto.js`. N
 5. The scanner does not make trades. A top-500 rank is only a research-universe flag. ATH upside is not expected ROI. Exchange order minimums may exceed allocations.
 
 The old unused App2.js is not imported. Public deployments can still be rate limited or abused; consider access controls if needed. No API key is configured.
+
+## Independent scan status
+Market coverage is validated separately from optional watchlist coverage. The Excel `Scan status` column describes market coverage; `Watchlist status` describes the optional lookup. Missing watchlist IDs are reported without substituting zero prices. A completed market scan is still a sequential snapshot, not an atomic or guaranteed valuation. The watchlist retains unresolved IDs for later verification.

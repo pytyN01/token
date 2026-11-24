@@ -1,7 +1,7 @@
 import React,{useState,useRef,useEffect,useMemo} from "react";
 import axios from "axios";
 import {allocate} from "./utils/allocation";
-import {columns,enrich,tsv,copyText,cell} from "./utils/market";
+import {columns,enrich,tsv,copyText,cell,scanStatuses} from "./utils/market";
 import {extraCoinIds} from "./config/watchlist";
 import "./App.css";
 
@@ -49,7 +49,8 @@ export default function App(){
   if(active.current)return;
   const ctl=new AbortController();active.current=ctl;
   const sig=ctl.signal, id=new Date().toISOString(), wanted=include?[...new Set(watch.split(/[\s,]+/).filter(Boolean))]:[];
-  const seen=new Map(),marketSeen=new Set(),failed=[],missing=[];
+  const seen=new Map(),marketSeen=new Set(),marketErrors=[],watchErrors=[],missing=[];
+  let stage="market";
   let pagesOK=0,shortPages=0,duplicateCount=0;
   const pages=scope/PAGE_SIZE, step=pause*1000;
   setRunning(true);setRaw([]);setMeta(null);setCopy(null);setNotice("");
@@ -63,27 +64,28 @@ export default function App(){
     if(page>1)await delay(step,sig);
     setMessage("Market page "+page+" / "+pages);
     try{const data=await request({page},sig,step,setMessage);save(data,true);pagesOK++;if(data.length!==PAGE_SIZE)shortPages++;}
-    catch(e){if(sig.aborted)throw e;failed.push("Page "+page+": "+(e.response?.status||e.message));}
+    catch(e){if(sig.aborted)throw e;marketErrors.push("Page "+page+": "+(e.response?.status||e.message));}
    }
+   stage="watchlist";
    const extra=wanted.filter(id=>!seen.has(id));
    for(let i=0;i<extra.length;i+=50){
     await delay(step,sig);
     const batch=extra.slice(i,i+50);
     setMessage("Watchlist batch "+(Math.floor(i/50)+1));
     try{save(await request({ids:batch.join(",")},sig,step,setMessage),false);}
-    catch(e){if(sig.aborted)throw e;failed.push("Watchlist batch "+(Math.floor(i/50)+1)+": "+(e.response?.status||e.message));}
+    catch(e){if(sig.aborted)throw e;watchErrors.push("Watchlist batch "+(Math.floor(i/50)+1)+": "+(e.response?.status||e.message));}
    }
-  }catch(e){if(!sig.aborted)failed.push(e.message);}
+  }catch(e){if(!sig.aborted){(stage==="market"?marketErrors:watchErrors).push(e.message);}}
   finally{
    missing.push(...wanted.filter(x=>!seen.has(x)));
    const ranks=new Set([...marketSeen].map(x=>seen.get(x)?.market_cap_rank));
    const missingRanks=Array.from({length:scope},(_,i)=>i+1).filter(x=>!ranks.has(x));
-   const status=sig.aborted?"Canceled":failed.length||missing.length||shortPages||duplicateCount||pagesOK!==pages||marketSeen.size!==scope||missingRanks.length?"Partial":"Complete";
-   setMeta({id,wanted,status,failed,missing,pagesOK,pages,duplicateCount,shortPages,missingRanks,marketCount:marketSeen.size});
-   setMessage(status+" — "+seen.size+" unique coins");setRunning(false);active.current=null;
+   const {marketStatus,watchStatus}=scanStatuses({canceled:sig.aborted,stage,marketErrors,watchErrors,missing,pagesOK,pages,shortPages,duplicateCount,marketCount:marketSeen.size,scope,missingRanks,include});
+   setMeta({id,wanted,marketStatus,watchStatus,marketErrors,watchErrors,missing,pagesOK,pages,duplicateCount,shortPages,missingRanks,marketCount:marketSeen.size});
+   setMessage("Market: "+marketStatus+" · Watchlist: "+watchStatus+" — "+seen.size+" unique coins");setRunning(false);active.current=null;
   }
  }
- const data=useMemo(()=>raw.map(c=>enrich(c,meta?.id||"",new Set(meta?.wanted||[]),meta?.status||"In progress")),[raw,meta]);
+ const data=useMemo(()=>raw.map(c=>enrich(c,meta?.id||"",new Set(meta?.wanted||[]),meta?.marketStatus||"In progress",meta?.watchStatus||"In progress")),[raw,meta]);
  const visible=useMemo(()=>data.filter(c=>(filter==="all"||(filter==="top500"&&c.eligible==="Yes")||(filter==="watch"&&c.watchlist==="Yes"))&&[c.id,c.name,c.symbol].some(x=>String(x||"").toLowerCase().includes(search.toLowerCase()))).sort((a,b)=>{
   const x=a[sort.key],y=b[sort.key];if(x==null)return y==null?0:1;if(y==null)return -1;
   return (typeof x==="number"&&typeof y==="number"?x-y:String(x).localeCompare(String(y)))*(sort.asc?1:-1);
@@ -105,10 +107,18 @@ export default function App(){
   </div>
   {include&&<details><summary>Watchlist coin IDs (editable)</summary><textarea disabled={running} rows={5} value={watch} onChange={e=>setWatch(e.target.value)}/></details>}
   <p role="status">{message} {running&&" · "+raw.length+" loaded"}</p>
-  {meta&&<div className={meta.status==="Complete"?"report":"warning"}><strong>{meta.status}</strong> · {meta.pagesOK}/{meta.pages} pages · {meta.marketCount} market coins · {meta.duplicateCount} duplicate rows · {meta.shortPages} short pages · {meta.missingRanks.length} missing ranks
-   {!!meta.failed.length&&<p>Errors: {meta.failed.join("; ")}</p>}{!!meta.missing.length&&<p>Missing watchlist IDs: {meta.missing.join(", ")}</p>}
-   {meta.status!=="Complete"&&<p>Partial data: do not use as a complete investment universe.</p>}
-  </div>}
+  {meta&&<>
+   <div className={meta.marketStatus==="Complete"?"report":"warning"}><strong>Market scan: {meta.marketStatus}</strong> · {meta.pagesOK}/{meta.pages} pages · {meta.marketCount} market coins · {meta.duplicateCount} duplicate rows · {meta.shortPages} short pages · {meta.missingRanks.length} missing ranks
+   {!!meta.marketErrors.length&&<p>Market errors: {meta.marketErrors.join("; ")}</p>}
+   {!!meta.missingRanks.length&&<p>Missing ranks: {meta.missingRanks.join(", ")}</p>}
+   {meta.marketStatus!=="Complete"&&<p>Incomplete market coverage: do not use as a complete investment universe.</p>}
+   </div>
+   <div className={["Complete","Skipped"].includes(meta.watchStatus)?"report":"warning"}><strong>Watchlist: {meta.watchStatus}</strong> · {meta.wanted.length-meta.missing.length}/{meta.wanted.length} IDs returned
+   {!!meta.watchErrors.length&&<p>Watchlist errors: {meta.watchErrors.join("; ")}</p>}
+   {!!meta.missing.length&&<p>Missing watchlist IDs: {meta.missing.join(", ")}</p>}
+   {meta.watchStatus==="Partial"&&<p>Missing watchlist data is not a zero valuation and does not invalidate a complete market scan.</p>}
+   </div>
+  </>}
   <div className="controls"><label>Filter<select value={filter} onChange={e=>setFilter(e.target.value)}><option value="all">All collected</option><option value="top500">Top 500</option><option value="watch">Watchlist</option></select></label>
    <label>Search<input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Name, symbol or ID"/></label>
    <button disabled={running||!meta||!data.length} onClick={()=>copyMarket(data)}>Copy all to Excel</button><button disabled={running||!meta||!visible.length} onClick={()=>copyMarket(visible)}>Copy filtered to Excel</button></div>
