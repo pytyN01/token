@@ -67,3 +67,10 @@ tr:nth-child(even) { background: var(--stripe); }
   .terminal-header { flex-wrap: wrap; }
   .theme-toggle { margin-left: auto; }
 }
+
+.scan-progress { border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin: 12px 0; background: var(--stripe); }
+.scan-progress-heading { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px; }
+.scan-progress-heading strong { font-variant-numeric: tabular-nums; }
+.scan-progress-heading span, .scan-progress small { color: var(--muted); }
+.scan-progress progress { width: 100%; height: 12px; margin-top: 10px; accent-color: var(--focus); }
+.scan-progress p { margin: 8px 0 4px; }

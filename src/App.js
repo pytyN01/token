@@ -3,6 +3,7 @@ import axios from "axios";
 import {allocate} from "./utils/allocation";
 import {columns,enrich,tsv,copyText,cell,scanStatuses} from "./utils/market";
 import {extraCoinIds} from "./config/watchlist";
+import {remainingMs,formatCountdown,retryDelay} from "./utils/scanTiming";
 import "./App.css";
 
 const PAGE_SIZE=250;
@@ -12,20 +13,20 @@ const delay=(ms,signal)=>new Promise((resolve,reject)=>{
  const timer=setTimeout(()=>{signal.removeEventListener("abort",abort);resolve();},ms);
  signal.addEventListener("abort",abort,{once:true});
 });
-async function request(params,signal,pause,onRetry){
+async function request(params,signal,pause,onRetry,onAttempt,onResponse){
  for(let attempt=0;;attempt++){
   try{
+   onAttempt();
+   const started=Date.now();
    const r=await axios.get("/api/crypto",{params,signal,timeout:30000});
+   onResponse(Date.now()-started);
    if(!Array.isArray(r.data)) throw new Error("Unexpected API response");
    return r.data;
   }catch(e){
    const status=e.response?.status;
    if(signal.aborted||attempt>=3||(status&&status!==429&&status<500))throw e;
-   const retry=e.response?.headers?.["retry-after"];
-   const seconds=Number(retry);
-   const server=retry?(Number.isFinite(seconds)?seconds*1000:Math.max(0,Date.parse(retry)-Date.now())):0;
-   const wait=Math.max(pause*2**attempt,Number.isFinite(server)?server:0);
-   onRetry("Retrying after API error in "+Math.ceil(wait/1000)+" seconds");
+   const wait=retryDelay(status,pause,attempt,e.response?.headers?.["retry-after"],Date.now());
+   onRetry(status===429?"Rate limited — cooling down":"API error — retrying",wait);
    await delay(wait,signal);
   }
  }
@@ -42,6 +43,26 @@ function initialTheme(){
  try {return window.localStorage.getItem(THEME_KEY)==="light"?"light":"dark";}
  catch {return "dark";}
 }
+function ScanCountdown({progress}){
+ const [now,setNow]=useState(()=>Date.now());
+ useEffect(()=>{
+  const timer=setInterval(()=>setNow(Date.now()),1000);
+  return ()=>clearInterval(timer);
+ },[]);
+ const current=Math.max(now,progress.updated);
+ const eta=remainingMs(progress,current);
+ const wait=Math.max(0,progress.until-current);
+ const waiting=progress.phase==="waiting"||progress.phase==="retry";
+ return <div className="scan-progress">
+  <div className="scan-progress-heading">
+   <strong>Estimated time remaining: {eta>0?formatCountdown(eta):"Finishing…"}</strong>
+   <span>{progress.completed}/{progress.total} request batches processed</span>
+  </div>
+  <progress aria-label="Scan request progress" max={Math.max(1,progress.total)} value={progress.completed}/>
+  <p>{waiting?((progress.phase==="retry"?"Retry cooldown: ":"Next request in: ")+formatCountdown(wait)):"Fetching market data…"}</p>
+  <small>Estimate includes planned watchlist requests and updates with API response times and retries.</small>
+ </div>;
+}
 export default function App(){
  const [theme,setTheme]=useState(initialTheme);
  useEffect(()=>{
@@ -50,11 +71,12 @@ export default function App(){
   if(meta)meta.setAttribute("content",theme==="dark"?"#0d1117":"#f4f6f8");
   try {window.localStorage.setItem(THEME_KEY,theme);} catch {/* Theme still works without storage. */}
  },[theme]);
- const [scope,setScope]=useState(1000),[pause,setPause]=useState(20),[include,setInclude]=useState(true);
+ const [scope,setScope]=useState(1000),[pause,setPause]=useState(12),[include,setInclude]=useState(true);
  const [watch,setWatch]=useState(extraCoinIds.join("\n")),[raw,setRaw]=useState([]),[meta,setMeta]=useState(null);
  const [running,setRunning]=useState(false),[message,setMessage]=useState("Ready"),[filter,setFilter]=useState("all"),[search,setSearch]=useState("");
  const [sort,setSort]=useState({key:"market_cap_rank",asc:true}),[copy,setCopy]=useState(null),[notice,setNotice]=useState("");
  const [budget,setBudget]=useState("100"),[rankInput,setRankInput]=useState("");
+ const [progress,setProgress]=useState(null);
  const active=useRef(null);
  useEffect(()=>()=>active.current?.abort(),[]);
  async function scan(){
@@ -65,7 +87,24 @@ export default function App(){
   let stage="market";
   let pagesOK=0,shortPages=0,duplicateCount=0;
   const pages=scope/PAGE_SIZE, step=pause*1000;
-  setRunning(true);setRaw([]);setMeta(null);setCopy(null);setNotice("");
+  let timing={total:pages+Math.ceil(wanted.length/50),completed:0,gap:step,average:1000,phase:"request",until:0,started:Date.now(),updated:Date.now()};
+  let samples=0;
+  const publish=(patch)=>{timing={...timing,...patch,updated:Date.now()};setProgress(timing);};
+  const waitFor=async(ms)=>{publish({phase:"waiting",until:Date.now()+ms});await delay(ms,sig);};
+  const fetchBatch=async(params)=>{
+   try {
+    return await request(params,sig,step,(label,ms)=>{
+     setMessage(label);
+     publish({phase:"retry",until:Date.now()+ms});
+    },()=>publish({phase:"request",started:Date.now(),until:0}),ms=>{
+     samples++;
+     publish({average:Math.max(250,samples===1?ms:(timing.average*(samples-1)+ms)/samples)});
+    });
+   } finally {
+    if(!sig.aborted)publish({completed:timing.completed+1,phase:"between",until:0});
+   }
+  };
+  setRunning(true);setRaw([]);setMeta(null);setCopy(null);setNotice("");publish({});
   const save=(data,market)=>{
    const fetched=new Date().toISOString();
    for(const c of data){if(!c?.id)continue;if(market){if(marketSeen.has(c.id))duplicateCount++;marketSeen.add(c.id);}seen.set(c.id,{...c,fetched});}
@@ -73,19 +112,20 @@ export default function App(){
   };
   try{
    for(let page=1;page<=pages;page++){
-    if(page>1)await delay(step,sig);
+    if(page>1)await waitFor(step);
     setMessage("Market page "+page+" / "+pages);
-    try{const data=await request({page},sig,step,setMessage);save(data,true);pagesOK++;if(data.length!==PAGE_SIZE)shortPages++;}
-    catch(e){if(sig.aborted)throw e;marketErrors.push("Page "+page+": "+(e.response?.status||e.message));}
+    try{const data=await fetchBatch({page});save(data,true);pagesOK++;if(data.length!==PAGE_SIZE)shortPages++;}
+    catch(e){if(sig.aborted)throw e;marketErrors.push("Page "+page+": "+(e.response?.status||e.message));if(e.response?.status===429)throw e;}
    }
    stage="watchlist";
    const extra=wanted.filter(id=>!seen.has(id));
+   publish({total:pages+Math.ceil(extra.length/50)});
    for(let i=0;i<extra.length;i+=50){
-    await delay(step,sig);
+    await waitFor(step);
     const batch=extra.slice(i,i+50);
     setMessage("Watchlist batch "+(Math.floor(i/50)+1));
-    try{save(await request({ids:batch.join(",")},sig,step,setMessage),false);}
-    catch(e){if(sig.aborted)throw e;watchErrors.push("Watchlist batch "+(Math.floor(i/50)+1)+": "+(e.response?.status||e.message));}
+    try{save(await fetchBatch({ids:batch.join(",")}),false);}
+    catch(e){if(sig.aborted)throw e;watchErrors.push("Watchlist batch "+(Math.floor(i/50)+1)+": "+(e.response?.status||e.message));if(e.response?.status===429)throw e;}
    }
   }catch(e){if(!sig.aborted){(stage==="market"?marketErrors:watchErrors).push(e.message);}}
   finally{
@@ -94,7 +134,7 @@ export default function App(){
    const missingRanks=Array.from({length:scope},(_,i)=>i+1).filter(x=>!ranks.has(x));
    const {marketStatus,watchStatus}=scanStatuses({canceled:sig.aborted,stage,marketErrors,watchErrors,missing,pagesOK,pages,shortPages,duplicateCount,marketCount:marketSeen.size,scope,missingRanks,include});
    setMeta({id,wanted,marketStatus,watchStatus,marketErrors,watchErrors,missing,pagesOK,pages,duplicateCount,shortPages,missingRanks,marketCount:marketSeen.size});
-   setMessage("Market: "+marketStatus+" · Watchlist: "+watchStatus+" — "+seen.size+" unique coins");setRunning(false);active.current=null;
+   setMessage("Market: "+marketStatus+" · Watchlist: "+watchStatus+" — "+seen.size+" unique coins");setRunning(false);setProgress(null);active.current=null;
   }
  }
  const data=useMemo(()=>raw.map(c=>enrich(c,meta?.id||"",new Set(meta?.wanted||[]),meta?.marketStatus||"In progress",meta?.watchStatus||"In progress")),[raw,meta]);
@@ -118,12 +158,13 @@ export default function App(){
   </header>
   <section><h2>Market scanner</h2><div className="controls">
    <label>Market coverage<select disabled={running} value={scope} onChange={e=>setScope(Number(e.target.value))}>{[500,1000,2000,3000].map(n=><option key={n} value={n}>Top {n.toLocaleString()}</option>)}</select></label>
-   <label>Request delay<select disabled={running} value={pause} onChange={e=>setPause(Number(e.target.value))}>{[10,20,30,60].map(n=><option key={n} value={n}>{n} seconds</option>)}</select></label>
+   <label>Request delay<select disabled={running} value={pause} onChange={e=>setPause(Number(e.target.value))}>{[5,10,12,15,20,30,60].map(n=><option key={n} value={n}>{n} seconds{n===12?" (default)":n<12?" (faster, higher risk)":""}</option>)}</select></label>
    <label className="check"><input type="checkbox" checked={include} disabled={running} onChange={e=>setInclude(e.target.checked)}/> Include watchlist</label>
    <button disabled={running} onClick={scan}>Run market scan</button><button disabled={!running} onClick={()=>active.current?.abort()}>Cancel</button>
   </div>
   {include&&<details><summary>Watchlist coin IDs (editable)</summary><textarea disabled={running} rows={5} value={watch} onChange={e=>setWatch(e.target.value)}/></details>}
   <p role="status">{message} {running&&" · "+raw.length+" loaded"}</p>
+  {running&&progress&&<ScanCountdown progress={progress}/>}
   {meta&&<>
    <div className={meta.marketStatus==="Complete"?"report":"warning"}><strong>Market scan: {meta.marketStatus}</strong> · {meta.pagesOK}/{meta.pages} pages · {meta.marketCount} market coins · {meta.duplicateCount} duplicate rows · {meta.shortPages} short pages · {meta.missingRanks.length} missing ranks
    {!!meta.marketErrors.length&&<p>Market errors: {meta.marketErrors.join("; ")}</p>}

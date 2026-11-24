@@ -9,7 +9,7 @@ React / Create React App with a Vercel serverless endpoint at `api/crypto.js`. N
 - Use Vercel CLI (`npx vercel dev`) or a Vercel preview to exercise the serverless API. Plain CRA `npm start` does not serve the API route by itself.
 
 ## Workflow
-1. Choose coverage (default 1,000) and request delay (default 20 seconds). Run manually.
+1. Choose coverage (default 1,000) and request delay (default 12 seconds). Run manually.
 2. Check scan status, missing ranks, duplicates, and watchlist IDs. Public CoinGecko access may be rate limited; retry/backoff is included. A multi-page scan is not an atomic market snapshot.
 3. Copy all or filtered rows to Excel, including headers. Paste into a new historical snapshot rather than overwriting old data. Excel has approximately 15 significant digits of numeric precision; import identifiers or exact values as text if necessary. Provider missing values remain blank. The watchlist is the original deduplicated list, not a verified mapping of all legacy holdings.
 4. Evaluate project fundamentals and projected ROI in Excel. Paste exactly 20 unique CoinGecko IDs and expected ROI percentages (e.g. 250 means +250%) into the allocator. This is manual research input, not an automated recommendation. Budget must be a whole number from $20 to $1,000,000. The allocator reserves $1 per coin and apportions remaining dollars by rank using largest remainders. At $100 it produces $8 / $6 / $5 / $4 tiers. Ties can occur. Copy allocation separately and record actual executed amounts and fees in Excel.
@@ -22,3 +22,6 @@ Market coverage is validated separately from optional watchlist coverage. The Ex
 
 ## Appearance
 Dark mode is the default. Use the top-right theme toggle to switch between dark and light mode. Your choice is stored locally in your browser; switching themes does not reset scans or investment inputs.
+
+## Scan timing
+The keyless public API has variable rate limits; 12 seconds is a theoretical five-request/minute pace, not a guarantee. Faster options can trigger throttling. The countdown estimates remaining logical requests (including watchlist batches), uses observed successful response durations, and includes active retry waits. HTTP 429 retries wait at least 60 seconds or longer if required by Retry-After or exponential backoff; an exhausted 429 stops the scan to avoid repeatedly hitting the limit. Existing partial results remain available. The timer is an estimate, not a guarantee of completion time.
