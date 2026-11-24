@@ -37,7 +37,19 @@ function parseRanks(input){
   return {id:p[0],roi:Number(p[1].replace(/%$/,""))};
  });
 }
+const THEME_KEY = "crypto-research-theme";
+function initialTheme(){
+ try {return window.localStorage.getItem(THEME_KEY)==="light"?"light":"dark";}
+ catch {return "dark";}
+}
 export default function App(){
+ const [theme,setTheme]=useState(initialTheme);
+ useEffect(()=>{
+  document.documentElement.dataset.theme=theme;
+  const meta=document.querySelector('meta[name="theme-color"]');
+  if(meta)meta.setAttribute("content",theme==="dark"?"#0d1117":"#f4f6f8");
+  try {window.localStorage.setItem(THEME_KEY,theme);} catch {/* Theme still works without storage. */}
+ },[theme]);
  const [scope,setScope]=useState(1000),[pause,setPause]=useState(20),[include,setInclude]=useState(true);
  const [watch,setWatch]=useState(extraCoinIds.join("\n")),[raw,setRaw]=useState([]),[meta,setMeta]=useState(null);
  const [running,setRunning]=useState(false),[message,setMessage]=useState("Ready"),[filter,setFilter]=useState("all"),[search,setSearch]=useState("");
@@ -98,7 +110,12 @@ export default function App(){
  }
  const copyMarket=rows=>copyRows(tsv(columns.map(c=>c[0]),rows.map(r=>columns.map(c=>r[c[1]]))));
  return <main className="terminal">
-  <header><h1>Crypto Research Terminal</h1><p>Market snapshots and whole-dollar investment rounds</p></header>
+  <header className="terminal-header">
+   <div><h1>Crypto Research Terminal</h1><p>Market snapshots and whole-dollar investment rounds</p></div>
+   <button type="button" className="theme-toggle" aria-label="Light mode" aria-pressed={theme==="light"} onClick={()=>setTheme(t=>t==="dark"?"light":"dark")}>
+    <span aria-hidden="true">{theme==="dark"?"☀":"☾"}</span> {theme==="dark"?"Light mode":"Dark mode"}
+   </button>
+  </header>
   <section><h2>Market scanner</h2><div className="controls">
    <label>Market coverage<select disabled={running} value={scope} onChange={e=>setScope(Number(e.target.value))}>{[500,1000,2000,3000].map(n=><option key={n} value={n}>Top {n.toLocaleString()}</option>)}</select></label>
    <label>Request delay<select disabled={running} value={pause} onChange={e=>setPause(Number(e.target.value))}>{[10,20,30,60].map(n=><option key={n} value={n}>{n} seconds</option>)}</select></label>

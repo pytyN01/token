@@ -19,3 +19,6 @@ The old unused App2.js is not imported. Public deployments can still be rate lim
 
 ## Independent scan status
 Market coverage is validated separately from optional watchlist coverage. The Excel `Scan status` column describes market coverage; `Watchlist status` describes the optional lookup. Missing watchlist IDs are reported without substituting zero prices. A completed market scan is still a sequential snapshot, not an atomic or guaranteed valuation. The watchlist retains unresolved IDs for later verification.
+
+## Appearance
+Dark mode is the default. Use the top-right theme toggle to switch between dark and light mode. Your choice is stored locally in your browser; switching themes does not reset scans or investment inputs.

@@ -1,7 +1,69 @@
-*{box-sizing:border-box} body{background:#f4f6f8;color:#172333} .terminal{max-width:1500px;margin:auto;padding:24px} header{margin-bottom:24px} h1,h2{margin:0 0 12px} section{background:white;border:1px solid #d8e0e8;border-radius:10px;padding:18px;margin-bottom:18px} .controls{display:flex;gap:12px;align-items:end;flex-wrap:wrap;margin:12px 0} label{display:flex;flex-direction:column;gap:6px;font-weight:600;margin:8px 0} .check{flex-direction:row;align-items:center} input,select,textarea,button{font:inherit;padding:9px;border:1px solid #a9b7c6;border-radius:5px} textarea{width:100%;font-family:monospace} button{background:#e5edf5;color:#172333;cursor:pointer} button:disabled{opacity:.45;cursor:default} .table-wrap{max-height:560px;overflow:auto;border:1px solid #d8e0e8;margin:12px 0} table{border-collapse:collapse;width:100%;white-space:nowrap;font-size:13px} th,td{padding:9px;border-bottom:1px solid #e1e7ed;text-align:left} th{position:sticky;top:0;background:#e5edf5} th button{border:none;background:transparent;padding:0;font-weight:600} tr:nth-child(even){background:#f7f9fb} .report,.warning{padding:10px;border:1px solid #a9b7c6;border-radius:5px}.warning{border-color:#b56c16;color:#754600} @media(max-width:600px){.terminal{padding:10px}section{padding:12px}}
-/* Keep the research interface readable independently of inherited theme colors. */
-.terminal{color:#172333;color-scheme:light}
-.terminal section{color:#172333;background:#fff}
-.terminal table{color:#172333;background:#fff}
-.terminal th,.terminal td{color:#172333}
-.terminal input,.terminal select,.terminal textarea{color:#172333;background:#fff}
+:root {
+  color-scheme: dark;
+  --page: #0d1117;
+  --panel: #161b22;
+  --text: #e6edf3;
+  --muted: #a5b2c2;
+  --border: #303b49;
+  --control-border: #526175;
+  --control: #212b38;
+  --button: #263547;
+  --button-hover: #34465d;
+  --heading: #233041;
+  --stripe: #1c2430;
+  --focus: #79b8ff;
+  --warning-text: #ffd18a;
+  --warning-border: #b88239;
+  --warning-bg: #282116;
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+  --page: #f4f6f8;
+  --panel: #ffffff;
+  --text: #172333;
+  --muted: #526175;
+  --border: #d8e0e8;
+  --control-border: #a9b7c6;
+  --control: #ffffff;
+  --button: #e5edf5;
+  --button-hover: #d5e2ef;
+  --heading: #e5edf5;
+  --stripe: #f7f9fb;
+  --focus: #145ca8;
+  --warning-text: #754600;
+  --warning-border: #b56c16;
+  --warning-bg: #fff9ef;
+}
+* { box-sizing: border-box; }
+body { background: var(--page); color: var(--text); }
+.terminal { max-width: 1500px; margin: auto; padding: 24px; color: var(--text); }
+.terminal-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 24px; }
+.terminal-header p { color: var(--muted); margin-bottom: 0; }
+.theme-toggle { flex-shrink: 0; white-space: nowrap; }
+.theme-toggle span { margin-right: 5px; }
+h1, h2 { margin: 0 0 12px; }
+.terminal section { background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 10px; padding: 18px; margin-bottom: 18px; }
+.controls { display: flex; gap: 12px; align-items: end; flex-wrap: wrap; margin: 12px 0; }
+label { display: flex; flex-direction: column; gap: 6px; font-weight: 600; margin: 8px 0; }
+.check { flex-direction: row; align-items: center; }
+input, select, textarea, button { font: inherit; padding: 9px; border: 1px solid var(--control-border); border-radius: 5px; color: var(--text); background: var(--control); }
+input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
+textarea { width: 100%; font-family: monospace; }
+button { background: var(--button); cursor: pointer; }
+button:not(:disabled):hover { background: var(--button-hover); }
+button:disabled { opacity: .5; cursor: default; }
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.table-wrap { max-height: 560px; overflow: auto; border: 1px solid var(--border); margin: 12px 0; }
+table { border-collapse: collapse; width: 100%; white-space: nowrap; font-size: 13px; color: var(--text); background: var(--panel); }
+th, td { padding: 9px; border-bottom: 1px solid var(--border); text-align: left; color: var(--text); }
+th { position: sticky; top: 0; background: var(--heading); }
+th button { border: none; background: transparent; padding: 0; font-weight: 600; }
+tr:nth-child(even) { background: var(--stripe); }
+.report, .warning { padding: 10px; border: 1px solid var(--control-border); border-radius: 5px; margin: 8px 0; }
+.warning { border-color: var(--warning-border); color: var(--warning-text); background: var(--warning-bg); }
+@media(max-width:600px) {
+  .terminal { padding: 10px; }
+  .terminal section { padding: 12px; }
+  .terminal-header { flex-wrap: wrap; }
+  .theme-toggle { margin-left: auto; }
+}

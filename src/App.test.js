@@ -1,4 +1,4 @@
-import {render,screen} from "@testing-library/react";
+import {render,screen,fireEvent} from "@testing-library/react";
 import App from "./App";
 import {allocate} from "./utils/allocation";
 import {ratio,tsv,scanStatuses} from "./utils/market";
@@ -15,3 +15,28 @@ test("missing market ranks remain partial",()=>expect(scanStatuses({...fullScan,
 test("canceling watchlist preserves completed market scan",()=>expect(scanStatuses({...fullScan,canceled:true})).toEqual({marketStatus:"Complete",watchStatus:"Canceled"}));
 test("disabled watchlist is skipped",()=>expect(scanStatuses({...fullScan,include:false})).toEqual({marketStatus:"Complete",watchStatus:"Skipped"}));
 test("canceling market scan is not complete",()=>expect(scanStatuses({...fullScan,canceled:true,stage:"market",pagesOK:2})).toEqual({marketStatus:"Canceled",watchStatus:"Canceled"}));
+
+const themeKey="crypto-research-theme";
+afterEach(()=>{window.localStorage.removeItem(themeKey);delete document.documentElement.dataset.theme;});
+test("defaults to dark mode and switches without remounting the scanner",()=>{
+ window.localStorage.removeItem(themeKey);
+ render(<App/>);
+ expect(document.documentElement.dataset.theme).toBe("dark");
+ const search=screen.getByPlaceholderText("Name, symbol or ID");
+ fireEvent.change(search,{target:{value:"bitcoin"}});
+ const toggle=screen.getByRole("button",{name:"Light mode"});
+ expect(toggle).toHaveAttribute("aria-pressed","false");
+ fireEvent.click(toggle);
+ expect(document.documentElement.dataset.theme).toBe("light");
+ expect(window.localStorage.getItem(themeKey)).toBe("light");
+ expect(search).toHaveValue("bitcoin");
+ expect(toggle).toHaveAttribute("aria-pressed","true");
+ fireEvent.click(toggle);
+ expect(document.documentElement.dataset.theme).toBe("dark");
+});
+test("restores a saved light theme",()=>{
+ window.localStorage.setItem(themeKey,"light");
+ render(<App/>);
+ expect(document.documentElement.dataset.theme).toBe("light");
+ expect(screen.getByRole("button",{name:"Light mode"})).toHaveAttribute("aria-pressed","true");
+});
