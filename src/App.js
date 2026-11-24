@@ -1,212 +1,126 @@
-import React, { useState, useEffect, useRef } from "react";
+import React,{useState,useRef,useEffect,useMemo} from "react";
 import axios from "axios";
+import {allocate} from "./utils/allocation";
+import {columns,enrich,tsv,copyText,cell} from "./utils/market";
+import {extraCoinIds} from "./config/watchlist";
+import "./App.css";
 
-const styles = `
-.fade-in {
-  opacity: 0;
-  transform: translateY(6px);
-  animation: fadeIn 0.4s ease forwards;
-}
-
-@keyframes fadeIn {
-  to {
-    opacity: 1;
-    transform: translateY(0px);
+const PAGE_SIZE=250;
+const delay=(ms,signal)=>new Promise((resolve,reject)=>{
+ if(signal.aborted){reject(new Error("Canceled"));return;}
+ const abort=()=>{clearTimeout(timer);reject(new Error("Canceled"));};
+ const timer=setTimeout(()=>{signal.removeEventListener("abort",abort);resolve();},ms);
+ signal.addEventListener("abort",abort,{once:true});
+});
+async function request(params,signal,pause,onRetry){
+ for(let attempt=0;;attempt++){
+  try{
+   const r=await axios.get("/api/crypto",{params,signal,timeout:30000});
+   if(!Array.isArray(r.data)) throw new Error("Unexpected API response");
+   return r.data;
+  }catch(e){
+   const status=e.response?.status;
+   if(signal.aborted||attempt>=3||status&&status!==429&&status<500)throw e;
+   const retry=e.response?.headers?.["retry-after"];
+   const seconds=Number(retry);
+   const server=retry?(Number.isFinite(seconds)?seconds*1000:Math.max(0,Date.parse(retry)-Date.now())):0;
+   const wait=Math.max(pause*2**attempt,Number.isFinite(server)?server:0);
+   onRetry("Retrying after API error in "+Math.ceil(wait/1000)+" seconds");
+   await delay(wait,signal);
   }
+ }
 }
-`;
-
-if (typeof document !== "undefined" && !document.getElementById("fadeInStyles")) {
-  const styleTag = document.createElement("style");
-  styleTag.id = "fadeInStyles";
-  styleTag.textContent = styles;
-  document.head.appendChild(styleTag);
+function parseRanks(input){
+ return input.trim().split(/\r?\n/).filter(Boolean).filter((line,i)=>!(i===0&&/^coin[ _-]?id\s/i.test(line))).map(line=>{
+  const p=line.trim().split(/\t|,|\s+/).map(s=>s.trim());
+  if(p.length!==2||!p[1]||!/^[-+]?(?:\d+(?:\.\d*)?|\.\d+)%?$/.test(p[1]))throw new Error("Each line needs Coin ID and expected ROI %, e.g. chainlink 250.");
+  return {id:p[0],roi:Number(p[1].replace(/%$/,""))};
+ });
 }
-
-const pageCount = 12;
-const countPerPage = 250;
-const delayPerRequest = 20000;
-const extraCoinRequest = 20000;
-
-const extraCoinIds = [
-  "arena-z",              // 0 ARENAZ
-  "ai16z",                // 1 AI16Z
-  "boson-protocol",       // 2 BOSON
-  "levva-protocol",       // 3 LVVA
-  "tevaera",              // 4 TEVA
-  "derace",               // 5 ZERC
-  "subquery-network",     // 6 SQT
-  "mxc",                  // 7 MXC
-  "sudoswap",             // 8 SUDO
-  "lybra-finance",        // 9 LBR
-  "capybara-nation",      // 10 BARA
-  "crob-coin",            // 11 CROB
-  "cropto-barley-token",  // 11 CROB
-  "space-and-time",       // 12 SXT
-  "spark",                // 13 SPK
-  "shiden-network",       // 14 SDN
-  "senor-dip",            // 15 DIP
-  "kusama",               // -- KSM
-  "across-protocol",      // -- ACX
-  "unibot-eth",           // -- UNI
-  "veno-finance-vno",     // -- VNO
-  "juno",                 // -- JUNO
-  "step-app",             // -- FITFI
-  "neutron",              // -- NTRN
-  "cronos-id",            // -- CROID
-  "popcat",               // -- POPCAT
-  "mog-coin",             // -- MOG
-  "alchemy-pay",          // -- ACH
-  "uxlink",               // 16 UXLINK
-  "mfercoin",             // 17 MFER
-  "mines-of-dalarnia",
-  "myro",
-  "juno",
-  "stafi",
-  "idex",
-  "spectral",
-  "step-app",
-];
-
-const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
-
-const toDecimalString = (num) => {
-  const parsed = Number(num);
-  if (isNaN(parsed)) return num;
-  return parsed.toLocaleString("en-US", {
-    useGrouping: false,
-    maximumFractionDigits: 20,
-  });
-};
-
-const formatTime = (seconds) => {
-  const mins = Math.floor(seconds / 60);
-  const secs = seconds % 60;
-  return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
-};
-
-const Home = () => {
-  const [cryptoData, setCryptoData] = useState([]);
-  const [count, setCount] = useState(0);
-  const [page, setPage] = useState(1);
-  const [countdown, setCountdown] = useState(0);
-  const [error, setError] = useState(null);
-  const [doneLoadingAll, setDoneLoadingAll] = useState(false);
-
-  const countdownInterval = useRef(null);
-  const endTime = useRef(null);
-
-  useEffect(() => {
-    const estimatedTime = (pageCount - 1) * delayPerRequest + extraCoinRequest;
-    endTime.current = Date.now() + estimatedTime;
-
-    countdownInterval.current = setInterval(() => {
-      const remaining = Math.max(
-        Math.floor((endTime.current - Date.now()) / 1000),
-        0
-      );
-      setCountdown(remaining);
-    }, 1000);
-
-    return () => clearInterval(countdownInterval.current);
-  }, []);
-
-  useEffect(() => {
-    const controller = new AbortController();
-
-    const fetchCryptoData = async () => {
-      try {
-        const response = await axios.get(`/api/crypto?page=${page}`);
-
-        setCryptoData((prevData) => [...prevData, ...response.data]);
-        setCount((prevCount) => prevCount + countPerPage);
-
-        if (page < pageCount) {
-          await sleep(delayPerRequest);
-          setPage((prevPage) => prevPage + 1);
-        } else {
-          await sleep(delayPerRequest);
-          await fetchExtraCoins();
-          clearInterval(countdownInterval.current);
-          setCountdown(0);
-          setDoneLoadingAll(true);
-        }
-      } catch (err) {
-        if (axios.isCancel(err)) {
-          console.log("Request canceled:", err.message);
-        } else {
-          console.error("Error fetching crypto data:", err);
-          setError("Error fetching data. Please try again later.");
-          setCryptoData([]);
-          clearInterval(countdownInterval.current);
-        }
-      }
-    };
-
-    const fetchExtraCoins = async () => {
-      try {
-        const response = await axios.get(`/api/crypto`, {
-  params: { ids: extraCoinIds.join(",") }
-})
-        setCryptoData((prevData) => [...prevData, ...response.data]);
-        setCount((prevCount) => prevCount + response.data.length);
-      } catch (err) {
-        console.error("Error fetching extra coins:", err);
-      }
-    };
-
-    fetchCryptoData();
-    return () => controller.abort();
-  }, [page]);
-
-  return (
-    <div>
-      {error && <p style={{ color: "red" }}>{error}</p>}
-
-      {!doneLoadingAll && (
-        <p aria-live="polite">
-          Loading top {pageCount * countPerPage + extraCoinIds.length} results…{" "}
-          {count} loaded… {formatTime(countdown)} left. ⏳
-        </p>
-      )}
-
-      <table>
-        <thead>
-          <tr>
-            <th>#</th>
-            <th>Name</th>
-            <th>Symbol</th>
-            <th>Current Price (USD)</th>
-            <th>All-Time High (USD)</th>
-            <th>ATH Date</th>
-            <th>X</th>
-          </tr>
-        </thead>
-
-        <tbody>
-          {cryptoData.map((crypto, index) => {
-            const animate = index < 250;
-
-            return (
-              <tr
-                key={crypto.id}
-                className={animate ? "fade-in" : ""}
-                style={animate ? { animationDelay: `${index * 0.015}s` } : {}}
-              >
-                <td>{crypto.market_cap_rank ?? index + 1}</td>
-                <td>{crypto.name}</td>
-                <td>{crypto.symbol.toUpperCase()}</td>
-                <td>${toDecimalString(crypto.current_price)}</td>
-                <td>${toDecimalString(crypto.ath)}</td>
-                <td>{new Date(crypto.ath_date).toLocaleDateString()}</td>
-                <td>{(crypto.ath / crypto.current_price).toFixed(2)}</td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
-};
-
-export default Home;
+export default function App(){
+ const [scope,setScope]=useState(1000),[pause,setPause]=useState(20),[include,setInclude]=useState(true);
+ const [watch,setWatch]=useState(extraCoinIds.join("\n")),[raw,setRaw]=useState([]),[meta,setMeta]=useState(null);
+ const [running,setRunning]=useState(false),[message,setMessage]=useState("Ready"),[filter,setFilter]=useState("all"),[search,setSearch]=useState("");
+ const [sort,setSort]=useState({key:"market_cap_rank",asc:true}),[copy,setCopy]=useState(null),[notice,setNotice]=useState("");
+ const [budget,setBudget]=useState("100"),[rankInput,setRankInput]=useState("");
+ const active=useRef(null);
+ useEffect(()=>()=>active.current?.abort(),[]);
+ async function scan(){
+  if(active.current)return;
+  const ctl=new AbortController();active.current=ctl;
+  const sig=ctl.signal, id=new Date().toISOString(), wanted=include?[...new Set(watch.split(/[\s,]+/).filter(Boolean))]:[];
+  const seen=new Map(),marketSeen=new Set(),failed=[],missing=[];
+  let pagesOK=0,shortPages=0,duplicateCount=0;
+  const pages=scope/PAGE_SIZE, step=pause*1000;
+  setRunning(true);setRaw([]);setMeta(null);setCopy(null);setNotice("");
+  const save=(data,market)=>{
+   const fetched=new Date().toISOString();
+   for(const c of data){if(!c?.id)continue;if(market){if(marketSeen.has(c.id))duplicateCount++;marketSeen.add(c.id);}seen.set(c.id,{...c,fetched});}
+   setRaw([...seen.values()]);
+  };
+  try{
+   for(let page=1;page<=pages;page++){
+    if(page>1)await delay(step,sig);
+    setMessage("Market page "+page+" / "+pages);
+    try{const data=await request({page},sig,step,setMessage);save(data,true);pagesOK++;if(data.length!==PAGE_SIZE)shortPages++;}
+    catch(e){if(sig.aborted)throw e;failed.push("Page "+page+": "+(e.response?.status||e.message));}
+   }
+   const extra=wanted.filter(id=>!seen.has(id));
+   for(let i=0;i<extra.length;i+=50){
+    await delay(step,sig);
+    const batch=extra.slice(i,i+50);
+    setMessage("Watchlist batch "+(Math.floor(i/50)+1));
+    try{save(await request({ids:batch.join(",")},sig,step,setMessage),false);}
+    catch(e){if(sig.aborted)throw e;failed.push("Watchlist batch "+(Math.floor(i/50)+1)+": "+(e.response?.status||e.message));}
+   }
+  }catch(e){if(!sig.aborted)failed.push(e.message);}
+  finally{
+   missing.push(...wanted.filter(x=>!seen.has(x)));
+   const ranks=new Set([...marketSeen].map(x=>seen.get(x)?.market_cap_rank));
+   const missingRanks=Array.from({length:scope},(_,i)=>i+1).filter(x=>!ranks.has(x));
+   const status=sig.aborted?"Canceled":failed.length||missing.length||shortPages||duplicateCount||pagesOK!==pages||marketSeen.size!==scope||missingRanks.length?"Partial":"Complete";
+   setMeta({id,wanted,status,failed,missing,pagesOK,pages,duplicateCount,shortPages,missingRanks,marketCount:marketSeen.size});
+   setMessage(status+" — "+seen.size+" unique coins");setRunning(false);active.current=null;
+  }
+ }
+ const data=useMemo(()=>raw.map(c=>enrich(c,meta?.id||"",new Set(meta?.wanted||[]),meta?.status||"In progress")),[raw,meta]);
+ const visible=useMemo(()=>data.filter(c=>(filter==="all"||filter==="top500"&&c.eligible==="Yes"||filter==="watch"&&c.watchlist==="Yes")&&[c.id,c.name,c.symbol].some(x=>String(x||"").toLowerCase().includes(search.toLowerCase()))).sort((a,b)=>{
+  const x=a[sort.key],y=b[sort.key];if(x==null)return y==null?0:1;if(y==null)return -1;
+  return (typeof x==="number"&&typeof y==="number"?x-y:String(x).localeCompare(String(y)))*(sort.asc?1:-1);
+ }),[data,filter,search,sort]);
+ const result=useMemo(()=>{try{return {rows:allocate(/^\d+$/.test(budget)?Number(budget):NaN,parseRanks(rankInput))};}catch(e){return {error:e.message};}},[budget,rankInput]);
+ async function copyRows(text){
+  setNotice("");setCopy(null);
+  try{await copyText(text);setNotice("Copied. Paste into Excel with Ctrl+V.");}
+  catch{setCopy(text);setNotice("Automatic clipboard unavailable. Select the text below and press Ctrl+C.");}
+ }
+ const copyMarket=rows=>copyRows(tsv(columns.map(c=>c[0]),rows.map(r=>columns.map(c=>r[c[1]]))));
+ return <main className="terminal">
+  <header><h1>Crypto Research Terminal</h1><p>Market snapshots and whole-dollar investment rounds</p></header>
+  <section><h2>Market scanner</h2><div className="controls">
+   <label>Market coverage<select disabled={running} value={scope} onChange={e=>setScope(Number(e.target.value))}>{[500,1000,2000,3000].map(n=><option key={n} value={n}>Top {n.toLocaleString()}</option>)}</select></label>
+   <label>Request delay<select disabled={running} value={pause} onChange={e=>setPause(Number(e.target.value))}>{[10,20,30,60].map(n=><option key={n} value={n}>{n} seconds</option>)}</select></label>
+   <label className="check"><input type="checkbox" checked={include} disabled={running} onChange={e=>setInclude(e.target.checked)}/> Include watchlist</label>
+   <button disabled={running} onClick={scan}>Run market scan</button><button disabled={!running} onClick={()=>active.current?.abort()}>Cancel</button>
+  </div>
+  {include&&<details><summary>Watchlist coin IDs (editable)</summary><textarea disabled={running} rows={5} value={watch} onChange={e=>setWatch(e.target.value)}/></details>}
+  <p role="status">{message} {running&&" · "+raw.length+" loaded"}</p>
+  {meta&&<div className={meta.status==="Complete"?"report":"warning"}><strong>{meta.status}</strong> · {meta.pagesOK}/{meta.pages} pages · {meta.marketCount} market coins · {meta.duplicateCount} duplicate rows · {meta.shortPages} short pages · {meta.missingRanks.length} missing ranks
+   {!!meta.failed.length&&<p>Errors: {meta.failed.join("; ")}</p>}{!!meta.missing.length&&<p>Missing watchlist IDs: {meta.missing.join(", ")}</p>}
+   {meta.status!=="Complete"&&<p>Partial data: do not use as a complete investment universe.</p>}
+  </div>}
+  <div className="controls"><label>Filter<select value={filter} onChange={e=>setFilter(e.target.value)}><option value="all">All collected</option><option value="top500">Top 500</option><option value="watch">Watchlist</option></select></label>
+   <label>Search<input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Name, symbol or ID"/></label>
+   <button disabled={running||!meta||!data.length} onClick={()=>copyMarket(data)}>Copy all to Excel</button><button disabled={running||!meta||!visible.length} onClick={()=>copyMarket(visible)}>Copy filtered to Excel</button></div>
+  <p>{visible.length} displayed. ATH recovery is historical upside, not an expected return. Top 500 indicates rank only, not investment approval.</p>
+  <div className="table-wrap"><table><thead><tr>{columns.map(([label,key])=><th key={key}><button onClick={()=>setSort(s=>({key,asc:s.key===key?!s.asc:true}))}>{label}{sort.key===key?(sort.asc?" ↑":" ↓"):""}</button></th>)}</tr></thead><tbody>{visible.map(c=><tr key={c.id}>{columns.map(([,key])=><td key={key}>{cell(c[key])}</td>)}</tr>)}</tbody></table></div>
+  </section>
+  <section><h2>Investment round allocator</h2><p>Paste 20 unique CoinGecko IDs and your researched expected ROI percentages from Excel. Ranked automatically; no trades are executed.</p>
+   <label>Whole-dollar round budget (USD)<input type="number" min="20" max="1000000" step="1" value={budget} onChange={e=>setBudget(e.target.value)}/></label>
+   <label>Coin ID and expected ROI %<textarea rows={8} value={rankInput} onChange={e=>setRankInput(e.target.value)} placeholder={"chainlink\t250\nsolana\t220\n..."} /></label>
+   {result.error?<p role="status">{result.error}</p>:<><p><strong>Total allocated: ${result.rows.reduce((s,r)=>s+r.amount,0)}</strong> · 20 coins</p><button onClick={()=>copyRows(tsv(["Rank","Coin ID","Expected ROI %","Investment USD"],result.rows.map(r=>[r.rank,r.id,r.roi,r.amount])))}>Copy allocation to Excel</button><div className="table-wrap"><table><thead><tr><th>Rank</th><th>Coin ID</th><th>Expected ROI %</th><th>Investment USD</th></tr></thead><tbody>{result.rows.map(r=><tr key={r.id}><td>{r.rank}</td><td>{r.id}</td><td>{r.roi}</td><td>{r.amount}</td></tr>)}</tbody></table></div></>}
+   <p>Minimum $1 per coin. Ties are possible at small budgets. Check exchange minimum orders, fees and spreads before buying.</p>
+  </section>
+  {notice&&<p role="status">{notice}</p>}{copy!==null&&<textarea aria-label="Manual clipboard fallback" readOnly rows={8} value={copy} onFocus={e=>e.target.select()}/>}
+ </main>;
+}
