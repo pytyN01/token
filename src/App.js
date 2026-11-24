@@ -3,6 +3,7 @@ import axios from "axios";
 import {allocate} from "./utils/allocation";
 import {columns,enrich,tsv,copyText,cell,scanStatuses} from "./utils/market";
 import {extraCoinIds} from "./config/watchlist";
+import {canonicalId,lookupIds,annotateLive,positivePrice,staticFallback,knownCoin} from "./config/staticCoins";
 import {remainingMs,formatCountdown,retryDelay} from "./utils/scanTiming";
 import "./App.css";
 
@@ -82,12 +83,12 @@ export default function App(){
  async function scan(){
   if(active.current)return;
   const ctl=new AbortController();active.current=ctl;
-  const sig=ctl.signal, id=new Date().toISOString(), wanted=include?[...new Set(watch.split(/[\s,]+/).filter(Boolean))]:[];
+  const sig=ctl.signal, id=new Date().toISOString(), wanted=include?[...new Set(watch.split(/[\s,]+/).filter(Boolean).map(canonicalId))]:[];
   const seen=new Map(),marketSeen=new Set(),marketErrors=[],watchErrors=[],missing=[];
   let stage="market";
   let pagesOK=0,shortPages=0,duplicateCount=0;
   const pages=scope/PAGE_SIZE, step=pause*1000;
-  let timing={total:pages+Math.ceil(wanted.length/50),completed:0,gap:step,average:1000,phase:"request",until:0,started:Date.now(),updated:Date.now()};
+  let timing={total:pages+Math.ceil(lookupIds(wanted).length/50),completed:0,gap:step,average:1000,phase:"request",until:0,started:Date.now(),updated:Date.now()};
   let samples=0;
   const publish=(patch)=>{timing={...timing,...patch,updated:Date.now()};setProgress(timing);};
   const waitFor=async(ms)=>{publish({phase:"waiting",until:Date.now()+ms});await delay(ms,sig);};
@@ -107,7 +108,15 @@ export default function App(){
   setRunning(true);setRaw([]);setMeta(null);setCopy(null);setNotice("");publish({});
   const save=(data,market)=>{
    const fetched=new Date().toISOString();
-   for(const c of data){if(!c?.id)continue;if(market){if(marketSeen.has(c.id))duplicateCount++;marketSeen.add(c.id);}seen.set(c.id,{...c,fetched});}
+   for(const row of data){
+    if(!row?.id)continue;
+    const c=annotateLive(row);
+    if(!c)continue;
+    if(market){if(marketSeen.has(c.id))duplicateCount++;marketSeen.add(c.id);}
+    const previous=seen.get(c.id);
+    // Prefer a usable quote; when both aliases return data prefer the canonical provider ID.
+    if(!previous || (positivePrice(c)&&!positivePrice(previous)) || (positivePrice(c)===positivePrice(previous)&&(market||c.providerId===c.id)))seen.set(c.id,{...c,fetched});
+   }
    setRaw([...seen.values()]);
   };
   try{
@@ -118,7 +127,7 @@ export default function App(){
     catch(e){if(sig.aborted)throw e;marketErrors.push("Page "+page+": "+(e.response?.status||e.message));if(e.response?.status===429)throw e;}
    }
    stage="watchlist";
-   const extra=wanted.filter(id=>!seen.has(id));
+   const extra=lookupIds(wanted.filter(id=>!positivePrice(seen.get(id))));
    publish({total:pages+Math.ceil(extra.length/50)});
    for(let i=0;i<extra.length;i+=50){
     await waitFor(step);
@@ -129,20 +138,33 @@ export default function App(){
    }
   }catch(e){if(!sig.aborted){(stage==="market"?marketErrors:watchErrors).push(e.message);}}
   finally{
-   missing.push(...wanted.filter(x=>!seen.has(x)));
+   missing.push(...wanted.filter(x=>!positivePrice(seen.get(x))));
    const ranks=new Set([...marketSeen].map(x=>seen.get(x)?.market_cap_rank));
    const missingRanks=Array.from({length:scope},(_,i)=>i+1).filter(x=>!ranks.has(x));
    const {marketStatus,watchStatus}=scanStatuses({canceled:sig.aborted,stage,marketErrors,watchErrors,missing,pagesOK,pages,shortPages,duplicateCount,marketCount:marketSeen.size,scope,missingRanks,include});
-   setMeta({id,wanted,marketStatus,watchStatus,marketErrors,watchErrors,missing,pagesOK,pages,duplicateCount,shortPages,missingRanks,marketCount:marketSeen.size});
-   setMessage("Market: "+marketStatus+" · Watchlist: "+watchStatus+" — "+seen.size+" unique coins");setRunning(false);setProgress(null);active.current=null;
+   const fallbackIds=[];
+   if(!sig.aborted){
+    for(const coinId of missing){
+     const fallback=staticFallback(coinId);
+     if(fallback){seen.set(coinId,fallback);fallbackIds.push(coinId);}
+    }
+   }
+   const unresolved=missing.filter(x=>!fallbackIds.includes(x));
+   setRaw([...seen.values()]);
+   setMeta({id,wanted,marketStatus,watchStatus,marketErrors,watchErrors,missing,fallbackIds,unresolved,pagesOK,pages,duplicateCount,shortPages,missingRanks,marketCount:marketSeen.size});
+   setMessage("Market: "+marketStatus+" · Watchlist: "+watchStatus+" — "+seen.size+" unique records ("+fallbackIds.length+" historical)");setRunning(false);setProgress(null);active.current=null;
   }
  }
  const data=useMemo(()=>raw.map(c=>enrich(c,meta?.id||"",new Set(meta?.wanted||[]),meta?.marketStatus||"In progress",meta?.watchStatus||"In progress")),[raw,meta]);
- const visible=useMemo(()=>data.filter(c=>(filter==="all"||(filter==="top500"&&c.eligible==="Yes")||(filter==="watch"&&c.watchlist==="Yes"))&&[c.id,c.name,c.symbol].some(x=>String(x||"").toLowerCase().includes(search.toLowerCase()))).sort((a,b)=>{
+ const visible=useMemo(()=>data.filter(c=>(filter==="all"||(filter==="top500"&&c.eligible==="Yes")||(filter==="watch"&&c.watchlist==="Yes")||(filter==="static"&&c.dataSource==="STATIC"))&&[c.id,c.name,c.symbol,c.legacyIds,c.providerId].some(x=>String(x||"").toLowerCase().includes(search.toLowerCase()))).sort((a,b)=>{
   const x=a[sort.key],y=b[sort.key];if(x==null)return y==null?0:1;if(y==null)return -1;
   return (typeof x==="number"&&typeof y==="number"?x-y:String(x).localeCompare(String(y)))*(sort.asc?1:-1);
  }),[data,filter,search,sort]);
- const result=useMemo(()=>{try{return {rows:allocate(/^\d+$/.test(budget)?Number(budget):NaN,parseRanks(rankInput))};}catch(e){return {error:e.message};}},[budget,rankInput]);
+ const result=useMemo(()=>{try{
+  const ranked=parseRanks(rankInput).map(r=>({...r,id:canonicalId(r.id.toLowerCase())}));
+  if(ranked.some(r=>knownCoin(r.id)))throw new Error("Legacy-only projects are excluded from new investment rounds.");
+  return {rows:allocate(/^\d+$/.test(budget)?Number(budget):NaN,ranked)};
+ }catch(e){return {error:e.message};}},[budget,rankInput]);
  async function copyRows(text){
   setNotice("");setCopy(null);
   try{await copyText(text);setNotice("Copied. Paste into Excel with Ctrl+V.");}
@@ -171,16 +193,17 @@ export default function App(){
    {!!meta.missingRanks.length&&<p>Missing ranks: {meta.missingRanks.join(", ")}</p>}
    {meta.marketStatus!=="Complete"&&<p>Incomplete market coverage: do not use as a complete investment universe.</p>}
    </div>
-   <div className={["Complete","Skipped"].includes(meta.watchStatus)?"report":"warning"}><strong>Watchlist: {meta.watchStatus}</strong> · {meta.wanted.length-meta.missing.length}/{meta.wanted.length} IDs returned
+   <div className={["Complete","Skipped"].includes(meta.watchStatus)?"report":"warning"}><strong>Watchlist: {meta.watchStatus}</strong> · {meta.wanted.length-meta.missing.length}/{meta.wanted.length} live quotes · {meta.fallbackIds.length} historical fallback records
    {!!meta.watchErrors.length&&<p>Watchlist errors: {meta.watchErrors.join("; ")}</p>}
-   {!!meta.missing.length&&<p>Missing watchlist IDs: {meta.missing.join(", ")}</p>}
-   {meta.watchStatus==="Partial"&&<p>Missing watchlist data is not a zero valuation and does not invalidate a complete market scan.</p>}
+   {!!meta.fallbackIds.length&&<p>Historical fallback (no usable live price): {meta.fallbackIds.join(", ")}</p>}
+   {!!meta.unresolved.length&&<p>Unresolved watchlist IDs: {meta.unresolved.join(", ")}</p>}
+   {meta.watchStatus==="Partial"&&<p>Historical records have blank current prices and do not invalidate a complete market scan.</p>}
    </div>
   </>}
-  <div className="controls"><label>Filter<select value={filter} onChange={e=>setFilter(e.target.value)}><option value="all">All collected</option><option value="top500">Top 500</option><option value="watch">Watchlist</option></select></label>
+  <div className="controls"><label>Filter<select value={filter} onChange={e=>setFilter(e.target.value)}><option value="all">All collected</option><option value="top500">Top 500</option><option value="watch">Watchlist</option><option value="static">Historical only</option></select></label>
    <label>Search<input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Name, symbol or ID"/></label>
    <button disabled={running||!meta||!data.length} onClick={()=>copyMarket(data)}>Copy all to Excel</button><button disabled={running||!meta||!visible.length} onClick={()=>copyMarket(visible)}>Copy filtered to Excel</button></div>
-  <p>{visible.length} displayed. ATH recovery is historical upside, not an expected return. Top 500 indicates rank only, not investment approval.</p>
+  <p>{visible.length} displayed. ATH recovery is historical upside, not an expected return. Top 500 indicates rank only, not investment approval. Historical-only records are excluded from new rounds.</p>
   <div className="table-wrap"><table><thead><tr>{columns.map(([label,key])=><th key={key}><button onClick={()=>setSort(s=>({key,asc:s.key===key?!s.asc:true}))}>{label}{sort.key===key?(sort.asc?" ↑":" ↓"):""}</button></th>)}</tr></thead><tbody>{visible.map(c=><tr key={c.id}>{columns.map(([,key])=><td key={key}>{cell(c[key])}</td>)}</tr>)}</tbody></table></div>
   </section>
   <section><h2>Investment round allocator</h2><p>Paste 20 unique CoinGecko IDs and your researched expected ROI percentages from Excel. Ranked automatically; no trades are executed.</p>
