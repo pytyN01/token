@@ -20,7 +20,7 @@ async function request(params,signal,pause,onRetry){
    return r.data;
   }catch(e){
    const status=e.response?.status;
-   if(signal.aborted||attempt>=3||status&&status!==429&&status<500)throw e;
+   if(signal.aborted||attempt>=3||(status&&status!==429&&status<500))throw e;
    const retry=e.response?.headers?.["retry-after"];
    const seconds=Number(retry);
    const server=retry?(Number.isFinite(seconds)?seconds*1000:Math.max(0,Date.parse(retry)-Date.now())):0;
@@ -84,7 +84,7 @@ export default function App(){
   }
  }
  const data=useMemo(()=>raw.map(c=>enrich(c,meta?.id||"",new Set(meta?.wanted||[]),meta?.status||"In progress")),[raw,meta]);
- const visible=useMemo(()=>data.filter(c=>(filter==="all"||filter==="top500"&&c.eligible==="Yes"||filter==="watch"&&c.watchlist==="Yes")&&[c.id,c.name,c.symbol].some(x=>String(x||"").toLowerCase().includes(search.toLowerCase()))).sort((a,b)=>{
+ const visible=useMemo(()=>data.filter(c=>(filter==="all"||(filter==="top500"&&c.eligible==="Yes")||(filter==="watch"&&c.watchlist==="Yes"))&&[c.id,c.name,c.symbol].some(x=>String(x||"").toLowerCase().includes(search.toLowerCase()))).sort((a,b)=>{
   const x=a[sort.key],y=b[sort.key];if(x==null)return y==null?0:1;if(y==null)return -1;
   return (typeof x==="number"&&typeof y==="number"?x-y:String(x).localeCompare(String(y)))*(sort.asc?1:-1);
  }),[data,filter,search,sort]);

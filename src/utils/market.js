@@ -12,7 +12,7 @@ export function enrich(c, snapshot, watchlist, status) {
  return {...c, snapshot,status,watchlist:watchlist.has(c.id)?"Yes":"No",eligible:number(c.market_cap_rank)!==null&&c.market_cap_rank>=1&&c.market_cap_rank<=500?"Yes":"No",fdvRatio:ratio(c.fully_diluted_valuation,c.market_cap),volumeRatio:ratio(c.total_volume,c.market_cap),supplyRatio:ratio(c.circulating_supply,c.max_supply),athX:ratio(c.ath,c.current_price),athCap:product(c.ath,c.circulating_supply)};
 }
 export function cell(v) {
- if(v===null||v===undefined||typeof v==="number"&&!Number.isFinite(v)) return "";
+ if(v===null||v===undefined||(typeof v==="number"&&!Number.isFinite(v))) return "";
  if(typeof v==="number") return v.toLocaleString("en-US",{useGrouping:false,maximumSignificantDigits:21});
  const s=String(v).replace(/[\t\r\n]/g," ");
  return /^[\s]*[=+\-@]/.test(s)?"'"+s:s;
