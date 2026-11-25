@@ -17,3 +17,14 @@ export function retryDelay(status, pause, attempt, retryAfter, now) {
  const server=retryAfter?(Number.isFinite(seconds)?seconds*1000:Date.parse(retryAfter)-now):0;
  return Math.max(status===429?60000:0,pause*2**attempt,Number.isFinite(server)?server:0);
 }
+
+// Estimated presentation progress; exact request counts remain separate.
+export function advancePercent(previous, progress, now) {
+ if(progress.finished)return 100;
+ const elapsed=Math.max(0,now-progress.scanStarted);
+ const eta=remainingMs(progress,now);
+ const target=Math.min(99,100*elapsed/Math.max(1,elapsed+eta));
+ // Do not regress when retries or additional batches extend the estimate.
+ // Catch up in small steps rather than jumping to a newly estimated position.
+ return Math.min(99,Math.max(previous,Math.min(previous+1,target)));
+}

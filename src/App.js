@@ -3,7 +3,7 @@ import axios from "axios";
 import {columns,enrich,tsv,copyText,cell,scanStatuses} from "./utils/market";
 import {extraCoinIds} from "./config/watchlist";
 import {canonicalId,lookupIds,annotateLive,positivePrice,staticFallback} from "./config/staticCoins";
-import {remainingMs,formatCountdown,retryDelay} from "./utils/scanTiming";
+import {remainingMs,formatCountdown,retryDelay,advancePercent} from "./utils/scanTiming";
 import {rankCoverage,repairPages,improvesCoverage,researchStatus,assignDisplayRanks} from "./utils/rankCoverage";
 import "./App.css";
 
@@ -39,26 +39,33 @@ function initialTheme(){
 }
 function ScanCountdown({progress}){
  const [now,setNow]=useState(()=>Date.now());
+ const [estimate,setEstimate]=useState(0);
  useEffect(()=>{
-  const timer=setInterval(()=>setNow(Date.now()),1000);
+  if(progress.finished)return undefined;
+  const tick=()=>{
+   const current=Date.now();
+   setNow(current);
+   setEstimate(previous=>advancePercent(previous,progress,current));
+  };
+  const timer=setInterval(tick,100);
   return ()=>clearInterval(timer);
- },[]);
+ },[progress]);
  const current=Math.max(now,progress.updated);
  const eta=remainingMs(progress,current);
  const wait=Math.max(0,progress.until-current);
  const waiting=progress.phase==="waiting"||progress.phase==="retry";
+ const percent=progress.finished?100:estimate;
  const total=Math.max(1,progress.total);
- const percent=Math.min(100,Math.max(0,100*progress.completed/total));
  return <div className="scan-progress">
   <div className="scan-progress-heading">
-   <strong>Estimated time remaining: {eta>0?formatCountdown(eta):"Finishing…"}</strong>
+   <strong>{progress.finished?"Requests finished":"Estimated time remaining: "+(eta>0?formatCountdown(eta):"Finishing…")}</strong>
    <span>{progress.completed}/{progress.total} request batches processed</span>
   </div>
-  <div className="scan-progress-track" role="progressbar" aria-label="Scan request progress" aria-valuemin={0} aria-valuemax={total} aria-valuenow={Math.min(total,progress.completed)}>
+  <div className="scan-progress-track" role="progressbar" aria-label="Estimated scan progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.floor(percent)} aria-valuetext={Math.floor(percent)+" percent estimated; "+Math.min(total,progress.completed)+" of "+total+" batches processed"}>
    <div className="scan-progress-fill" style={{width:percent+"%"}}/>
   </div>
-  <p>{waiting?((progress.phase==="retry"?"Retry cooldown: ":"Next request in: ")+formatCountdown(wait)):"Fetching market data…"}</p>
-  <small>Estimate includes planned watchlist requests and updates with API response times and retries.</small>
+  <div className="scan-percent">{Math.floor(percent)}%</div>
+  {!progress.finished&&<p>{waiting?((progress.phase==="retry"?"Retry cooldown: ":"Next request in: ")+formatCountdown(wait)):"Fetching market data…"}</p>}
  </div>;
 }
 export default function App(){
@@ -78,6 +85,11 @@ export default function App(){
  const active=useRef(null);
  useEffect(()=>()=>active.current?.abort(),[]);
  useEffect(()=>{
+  if(running||!progress?.finished)return undefined;
+  const timer=setTimeout(()=>setProgress(null),650);
+  return ()=>clearTimeout(timer);
+ },[running,progress]);
+ useEffect(()=>{
   if(!entryRows)return undefined;
   const timer=setTimeout(()=>setEntryRows(null),1300);
   return ()=>clearTimeout(timer);
@@ -91,7 +103,7 @@ export default function App(){
   let stage="market";
   let pagesOK=0,shortPages=0,duplicateCount=0;
   const pages=scope/PAGE_SIZE, step=pause*1000;
-  let timing={total:pages+Math.ceil(lookupIds(wanted).length/50),completed:0,gap:step,average:1000,phase:"request",until:0,started:Date.now(),updated:Date.now()};
+  let timing={total:pages+Math.ceil(lookupIds(wanted).length/50),completed:0,gap:step,average:1000,phase:"request",until:0,started:Date.now(),scanStarted:Date.now(),updated:Date.now()};
   let samples=0;
   const publish=(patch)=>{timing={...timing,...patch,updated:Date.now()};setProgress(timing);};
   const waitFor=async(ms)=>{publish({phase:"waiting",until:Date.now()+ms});await delay(ms,sig);};
@@ -126,7 +138,7 @@ export default function App(){
    }
    if(market&&!firstBatchShown&&seen.size){
     firstBatchShown=true;
-    setEntryRows(new Map([...seen.keys()].map((coinId,index)=>[coinId,Math.min(index*24,800)])));
+    setEntryRows(new Set(seen.keys()));
    }
    setRaw([...seen.values()]);
   };
@@ -212,7 +224,10 @@ export default function App(){
    const watchStatus=statuses.watchStatus;
    setRaw(ranked);
    setMeta({id,wanted,marketStatus,watchStatus,marketErrors,watchErrors,missing,fallbackIds,unresolved,pagesOK,pages,duplicateCount,shortPages,missingRanks,marketCount:marketSeen.size,research,providerResearch,providerMissingRanks,fallbackRanks,researchFallbacks,recoveryAttempts,recoveryAccepted,repairNotes});
-   setMessage("Market: "+marketStatus+" · Watchlist: "+watchStatus+" — "+seen.size+" unique records ("+fallbackIds.length+" historical)");setRunning(false);setProgress(null);active.current=null;
+   setMessage("Market: "+marketStatus+" · Watchlist: "+watchStatus+" — "+seen.size+" unique records ("+fallbackIds.length+" historical)");setRunning(false);
+   if(!sig.aborted&&timing.completed===timing.total){publish({finished:true,phase:"finished",until:0});}
+   else{setProgress(null);}
+   active.current=null;
   }
  }
  const data=useMemo(()=>raw.map(c=>enrich(c,meta?.id||"",new Set(meta?.wanted||[]),meta?.marketStatus||"In progress",meta?.watchStatus||"In progress",meta?.research.status||"In progress")),[raw,meta]);
@@ -241,12 +256,12 @@ export default function App(){
   </div>
   {include&&<details><summary>Watchlist coin IDs (editable)</summary><textarea disabled={running} rows={5} value={watch} onChange={e=>setWatch(e.target.value)}/></details>}
   {running&&<p role="status">{message} · {raw.length} loaded</p>}
-  {running&&progress&&<ScanCountdown progress={progress}/>}
+  {progress&&(running||progress.finished)&&<ScanCountdown progress={progress}/>}
   {!running&&meta&&raw.length===0&&<p role="alert">No records loaded. Please run the scan again.{meta.marketErrors.length>0?" "+meta.marketErrors.join("; "):""}</p>}
   <div className="controls compact-controls"><select aria-label="Filter" value={filter} onChange={e=>setFilter(e.target.value)}><option value="all">All collected</option><option value="top500">Top 500</option><option value="watch">Watchlist</option><option value="static">Historical only</option></select>
    <input aria-label="Search" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search name, symbol or ID"/>
    <button disabled={running||!meta||!data.length} onClick={()=>copyMarket(data)}>Copy all to Excel</button></div>
-  <div className="table-wrap"><table><thead><tr>{columns.map(([label,key])=><th key={key}><button onClick={()=>setSort(s=>({key,asc:s.key===key?!s.asc:true}))}>{label}{sort.key===key?(sort.asc?" ↑":" ↓"):""}</button></th>)}</tr></thead><tbody>{visible.map(c=><tr key={c.id} className={entryRows?.has(c.id)?"market-row-enter":undefined} style={entryRows?.has(c.id)?{"--entry-delay":entryRows.get(c.id)+"ms"}:undefined}>{columns.map(([,key])=><td key={key}>{cell(c[key])}</td>)}</tr>)}</tbody></table></div>
+  <div className="table-wrap"><table><thead><tr>{columns.map(([label,key])=><th key={key}><button onClick={()=>setSort(s=>({key,asc:s.key===key?!s.asc:true}))}>{label}{sort.key===key?(sort.asc?" ↑":" ↓"):""}</button></th>)}</tr></thead><tbody>{visible.map((c,index)=><tr key={c.id} className={entryRows?.has(c.id)?"market-row-enter":undefined} style={entryRows?.has(c.id)?{"--entry-delay":Math.min(index*45,800)+"ms"}:undefined}>{columns.map(([,key])=><td key={key}>{cell(c[key])}</td>)}</tr>)}</tbody></table></div>
   </section>
   {notice&&<p role="status">{notice}</p>}{copy!==null&&<textarea aria-label="Manual clipboard fallback" readOnly rows={8} value={copy} onFocus={e=>e.target.select()}/>}
  </main>;
