@@ -92,16 +92,23 @@ tr:nth-child(even) { background: var(--stripe); }
   background: var(--focus);
   transition: width 180ms linear;
 }
-.market-row-enter {
+/* Keep the table geometry, stripes, borders and headers visible at all times.
+   Only the text inside each first-batch cell participates in the reveal. */
+.market-data-enter .market-cell-value {
+  display: inline-block;
   opacity: 0;
 }
-.market-rows-revealed > .market-row-enter {
-  opacity: 1;
-  transition: opacity 500ms ease-out var(--entry-delay, 0ms);
+.market-data-revealed > .market-data-enter .market-cell-value {
+  animation: market-cell-fade 550ms ease-out var(--entry-delay, 0ms) both;
+}
+@keyframes market-cell-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 @media(prefers-reduced-motion: reduce) {
   .scan-progress-fill { transition: none; }
-  .market-row-enter, .market-rows-revealed > .market-row-enter { opacity: 1; transition: none; }
+  /* Explicitly requested opacity-only reveal: shorten the fade without moving content. */
+  .market-data-revealed > .market-data-enter .market-cell-value { animation-duration: 200ms; }
 }
 .scan-percent { text-align: center; font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; margin-top: 8px; }
 .scan-progress p { margin: 4px 0; color: var(--muted); }

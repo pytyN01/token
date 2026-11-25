@@ -92,17 +92,20 @@ export default function App(){
  },[running,progress]);
  useEffect(()=>{
   if(!entryRows)return undefined;
-  // Wait for the hidden table to paint before starting the stagger.
-  let revealFrame,cleanupTimer;
+  // Paint the fully sized grid with hidden cell text, then reveal the contents.
+  let revealFrame,revealTimer,cleanupTimer;
   const paintFrame=requestAnimationFrame(()=>{
    revealFrame=requestAnimationFrame(()=>{
-    setEntryRevealed(true);
-    cleanupTimer=setTimeout(()=>setEntryRows(null),2200);
+    revealTimer=setTimeout(()=>{
+     setEntryRevealed(true);
+     cleanupTimer=setTimeout(()=>setEntryRows(null),2600);
+    },300);
    });
   });
   return ()=>{
    cancelAnimationFrame(paintFrame);
    if(revealFrame!==undefined)cancelAnimationFrame(revealFrame);
+   if(revealTimer!==undefined)clearTimeout(revealTimer);
    if(cleanupTimer!==undefined)clearTimeout(cleanupTimer);
   };
  },[entryRows]);
@@ -273,7 +276,12 @@ export default function App(){
   <div className="controls compact-controls"><select aria-label="Filter" value={filter} onChange={e=>setFilter(e.target.value)}><option value="all">All collected</option><option value="top500">Top 500</option><option value="watch">Watchlist</option><option value="static">Historical only</option></select>
    <input aria-label="Search" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search name, symbol or ID"/>
    <button disabled={running||!meta||!data.length} onClick={()=>copyMarket(data)}>Copy all to Excel</button></div>
-  <div className="table-wrap"><table><thead><tr>{columns.map(([label,key])=><th key={key}><button onClick={()=>setSort(s=>({key,asc:s.key===key?!s.asc:true}))}>{label}{sort.key===key?(sort.asc?" ↑":" ↓"):""}</button></th>)}</tr></thead><tbody className={entryRevealed?"market-rows-revealed":undefined}>{visible.map((c,index)=><tr key={c.id} className={entryRows?.has(c.id)?"market-row-enter":undefined} style={entryRows?.has(c.id)?{"--entry-delay":Math.min(index*100,1500)+"ms"}:undefined}>{columns.map(([,key])=><td key={key}>{cell(c[key])}</td>)}</tr>)}</tbody></table></div>
+  <div className="table-wrap"><table><thead><tr>{columns.map(([label,key])=><th key={key}><button onClick={()=>setSort(s=>({key,asc:s.key===key?!s.asc:true}))}>{label}{sort.key===key?(sort.asc?" ↑":" ↓"):""}</button></th>)}</tr></thead><tbody className={entryRevealed?"market-data-revealed":undefined}>{visible.map((c,index)=>{
+   const entering=entryRows?.has(c.id);
+   return <tr key={c.id} className={entering?"market-data-enter":undefined} style={entering?{"--entry-delay":Math.min(index*110,1800)+"ms"}:undefined}>
+    {columns.map(([,key])=><td key={key}>{entering?<span className="market-cell-value">{cell(c[key])}</span>:cell(c[key])}</td>)}
+   </tr>;
+  })}</tbody></table></div>
   </section>
   {notice&&<p role="status">{notice}</p>}{copy!==null&&<textarea aria-label="Manual clipboard fallback" readOnly rows={8} value={copy} onFocus={e=>e.target.select()}/>}
  </main>;
