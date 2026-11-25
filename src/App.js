@@ -55,12 +55,16 @@ function ScanCountdown({progress}){
  const eta=remainingMs(progress,current);
  const wait=Math.max(0,progress.until-current);
  const waiting=progress.phase==="waiting"||progress.phase==="retry";
+ const total=Math.max(1,progress.total);
+ const percent=Math.min(100,Math.max(0,100*progress.completed/total));
  return <div className="scan-progress">
   <div className="scan-progress-heading">
    <strong>Estimated time remaining: {eta>0?formatCountdown(eta):"Finishing…"}</strong>
    <span>{progress.completed}/{progress.total} request batches processed</span>
   </div>
-  <progress aria-label="Scan request progress" max={Math.max(1,progress.total)} value={progress.completed}/>
+  <div className="scan-progress-track" role="progressbar" aria-label="Scan request progress" aria-valuemin={0} aria-valuemax={total} aria-valuenow={Math.min(total,progress.completed)}>
+   <div className="scan-progress-fill" style={{width:percent+"%"}}/>
+  </div>
   <p>{waiting?((progress.phase==="retry"?"Retry cooldown: ":"Next request in: ")+formatCountdown(wait)):"Fetching market data…"}</p>
   <small>Estimate includes planned watchlist requests and updates with API response times and retries.</small>
  </div>;
@@ -79,8 +83,14 @@ export default function App(){
  const [sort,setSort]=useState({key:"displayRank",asc:true}),[copy,setCopy]=useState(null),[notice,setNotice]=useState("");
  const [budget,setBudget]=useState("100"),[rankInput,setRankInput]=useState("");
  const [progress,setProgress]=useState(null);
+ const [entryRows,setEntryRows]=useState(null);
  const active=useRef(null);
  useEffect(()=>()=>active.current?.abort(),[]);
+ useEffect(()=>{
+  if(!entryRows)return undefined;
+  const timer=setTimeout(()=>setEntryRows(null),1300);
+  return ()=>clearTimeout(timer);
+ },[entryRows]);
  async function scan(){
   if(active.current)return;
   const ctl=new AbortController();active.current=ctl;
@@ -107,7 +117,8 @@ export default function App(){
     if(!sig.aborted)publish({completed:timing.completed+1,phase:"between",until:0});
    }
   };
-  setRunning(true);setRaw([]);setMeta(null);setCopy(null);setNotice("");publish({});
+  let firstBatchShown=false;
+  setRunning(true);setRaw([]);setMeta(null);setCopy(null);setNotice("");setEntryRows(null);publish({});
   const save=(data,market)=>{
    const fetched=new Date().toISOString();
    for(const row of data){
@@ -121,6 +132,10 @@ export default function App(){
      const rank=!market&&marketSeen.has(c.id)?previous?.market_cap_rank:c.market_cap_rank;
      seen.set(c.id,{...c,market_cap_rank:rank,fetched,marketMember:marketSeen.has(c.id)});
     }
+   }
+   if(market&&!firstBatchShown&&seen.size){
+    firstBatchShown=true;
+    setEntryRows(new Map([...seen.keys()].map((coinId,index)=>[coinId,Math.min(index*24,800)])));
    }
    setRaw([...seen.values()]);
   };
@@ -267,14 +282,17 @@ export default function App(){
    <label>Search<input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Name, symbol or ID"/></label>
    <button disabled={running||!meta||!data.length} onClick={()=>copyMarket(data)}>Copy all to Excel</button><button disabled={running||!meta||!visible.length} onClick={()=>copyMarket(visible)}>Copy filtered to Excel</button></div>
   <p>{visible.length} displayed. ATH recovery is historical upside, not an expected return. Rank uses CoinGecko when possible, calculated market ranks when needed, and local watchlist positions after the selected market range. Original provider ranks are retained separately. Top 500 is not investment approval.</p>
-  <div className="table-wrap"><table><thead><tr>{columns.map(([label,key])=><th key={key}><button onClick={()=>setSort(s=>({key,asc:s.key===key?!s.asc:true}))}>{label}{sort.key===key?(sort.asc?" ↑":" ↓"):""}</button></th>)}</tr></thead><tbody>{visible.map(c=><tr key={c.id}>{columns.map(([,key])=><td key={key}>{cell(c[key])}</td>)}</tr>)}</tbody></table></div>
+  <div className="table-wrap"><table><thead><tr>{columns.map(([label,key])=><th key={key}><button onClick={()=>setSort(s=>({key,asc:s.key===key?!s.asc:true}))}>{label}{sort.key===key?(sort.asc?" ↑":" ↓"):""}</button></th>)}</tr></thead><tbody>{visible.map(c=><tr key={c.id} className={entryRows?.has(c.id)?"market-row-enter":undefined} style={entryRows?.has(c.id)?{"--entry-delay":entryRows.get(c.id)+"ms"}:undefined}>{columns.map(([,key])=><td key={key}>{cell(c[key])}</td>)}</tr>)}</tbody></table></div>
   </section>
-  <section><h2>Investment round allocator</h2><p>Paste 20 unique CoinGecko IDs and your researched expected ROI percentages from Excel. Ranked automatically; no trades are executed.</p>
+  <section className="allocator-section"><details className="allocator-details">
+   <summary><span className="allocator-title">Investment round allocator</span><span className="allocator-hint">Optional · Whole-dollar budget tool</span></summary>
+   <div className="allocator-content"><p>Paste 20 unique CoinGecko IDs and your researched expected ROI percentages from Excel. Ranked automatically; no trades are executed.</p>
    <label>Whole-dollar round budget (USD)<input type="number" min="20" max="1000000" step="1" value={budget} onChange={e=>setBudget(e.target.value)}/></label>
    <label>Coin ID and expected ROI %<textarea rows={8} value={rankInput} onChange={e=>setRankInput(e.target.value)} placeholder={"chainlink\t250\nsolana\t220\n..."} /></label>
    {result.error?<p role="status">{result.error}</p>:<><p><strong>Total allocated: ${result.rows.reduce((s,r)=>s+r.amount,0)}</strong> · 20 coins</p><button onClick={()=>copyRows(tsv(["Rank","Coin ID","Expected ROI %","Investment USD"],result.rows.map(r=>[r.rank,r.id,r.roi,r.amount])))}>Copy allocation to Excel</button><div className="table-wrap"><table><thead><tr><th>Rank</th><th>Coin ID</th><th>Expected ROI %</th><th>Investment USD</th></tr></thead><tbody>{result.rows.map(r=><tr key={r.id}><td>{r.rank}</td><td>{r.id}</td><td>{r.roi}</td><td>{r.amount}</td></tr>)}</tbody></table></div></>}
    <p>Minimum $1 per coin. Ties are possible at small budgets. Check exchange minimum orders, fees and spreads before buying.</p>
-  </section>
+   </div>
+  </details></section>
   {notice&&<p role="status">{notice}</p>}{copy!==null&&<textarea aria-label="Manual clipboard fallback" readOnly rows={8} value={copy} onFocus={e=>e.target.select()}/>}
  </main>;
 }

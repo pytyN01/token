@@ -40,3 +40,19 @@ test("restores a saved light theme",()=>{
  expect(document.documentElement.dataset.theme).toBe("light");
  expect(screen.getByRole("button",{name:"Light mode"})).toHaveAttribute("aria-pressed","true");
 });
+
+test("investment allocator is collapsed initially and preserves inputs when toggled",()=>{
+ render(<App/>);
+ const summary=screen.getByText("Investment round allocator").closest("summary");
+ const details=summary.parentElement;
+ expect(details).not.toHaveAttribute("open");
+ const budget=screen.getByLabelText("Whole-dollar round budget (USD)");
+ expect(budget).toHaveValue(100);
+ fireEvent.click(summary);
+ expect(details).toHaveAttribute("open");
+ fireEvent.change(budget,{target:{value:"250"}});
+ fireEvent.click(summary);
+ expect(details).not.toHaveAttribute("open");
+ fireEvent.click(summary);
+ expect(budget).toHaveValue(250);
+});
