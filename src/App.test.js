@@ -3,7 +3,7 @@ import App from "./App";
 import {allocate} from "./utils/allocation";
 import {ratio,tsv,scanStatuses} from "./utils/market";
 const rows=Array.from({length:20},(_,i)=>({id:"coin-"+i,roi:100-i}));
-test("renders scanner and allocator without requesting data",()=>{render(<App/>);expect(screen.getByRole("button",{name:"Run market scan"})).toBeInTheDocument();expect(screen.getByText("Investment round allocator")).toBeInTheDocument();});
+test("renders scanner without the investment allocator",()=>{render(<App/>);expect(screen.getByRole("button",{name:"Run market scan"})).toBeInTheDocument();expect(screen.queryByText("Investment round allocator")).not.toBeInTheDocument();expect(screen.queryByLabelText("Whole-dollar round budget (USD)")).not.toBeInTheDocument();});
 test("100 dollar allocation matches agreed tiers",()=>expect(allocate(100,rows).map(r=>r.amount)).toEqual([8,6,6,6,6,5,5,5,5,5,5,5,5,4,4,4,4,4,4,4]));
 test.each([20,21,75,99,101,125,250,1000])("integer budget %s",budget=>{const a=allocate(budget,rows);expect(a.reduce((s,r)=>s+r.amount,0)).toBe(budget);expect(a.every(r=>Number.isInteger(r.amount)&&r.amount>=1)).toBe(true);});
 test("rejects invalid budgets and duplicate IDs",()=>{expect(()=>allocate(19,rows)).toThrow();expect(()=>allocate(100.5,rows)).toThrow();expect(()=>allocate(100,[...rows.slice(0,19),rows[0]])).toThrow();});
@@ -41,18 +41,3 @@ test("restores a saved light theme",()=>{
  expect(screen.getByRole("button",{name:"Light mode"})).toHaveAttribute("aria-pressed","true");
 });
 
-test("investment allocator is collapsed initially and preserves inputs when toggled",()=>{
- render(<App/>);
- const summary=screen.getByText("Investment round allocator").closest("summary");
- const details=summary.parentElement;
- expect(details).not.toHaveAttribute("open");
- const budget=screen.getByLabelText("Whole-dollar round budget (USD)");
- expect(budget).toHaveValue(100);
- fireEvent.click(summary);
- expect(details).toHaveAttribute("open");
- fireEvent.change(budget,{target:{value:"250"}});
- fireEvent.click(summary);
- expect(details).not.toHaveAttribute("open");
- fireEvent.click(summary);
- expect(budget).toHaveValue(250);
-});

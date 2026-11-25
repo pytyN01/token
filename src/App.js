@@ -1,9 +1,8 @@
 import React,{useState,useRef,useEffect,useMemo} from "react";
 import axios from "axios";
-import {allocate} from "./utils/allocation";
 import {columns,enrich,tsv,copyText,cell,scanStatuses} from "./utils/market";
 import {extraCoinIds} from "./config/watchlist";
-import {canonicalId,lookupIds,annotateLive,positivePrice,staticFallback,knownCoin} from "./config/staticCoins";
+import {canonicalId,lookupIds,annotateLive,positivePrice,staticFallback} from "./config/staticCoins";
 import {remainingMs,formatCountdown,retryDelay} from "./utils/scanTiming";
 import {rankCoverage,repairPages,improvesCoverage,researchStatus,assignDisplayRanks} from "./utils/rankCoverage";
 import "./App.css";
@@ -32,13 +31,6 @@ async function request(params,signal,pause,onRetry,onAttempt,onResponse){
    await delay(wait,signal);
   }
  }
-}
-function parseRanks(input){
- return input.trim().split(/\r?\n/).filter(Boolean).filter((line,i)=>!(i===0&&/^coin[ _-]?id\s/i.test(line))).map(line=>{
-  const p=line.trim().split(/\t|,|\s+/).map(s=>s.trim());
-  if(p.length!==2||!p[1]||!/^[-+]?(?:\d+(?:\.\d*)?|\.\d+)%?$/.test(p[1]))throw new Error("Each line needs Coin ID and expected ROI %, e.g. chainlink 250.");
-  return {id:p[0],roi:Number(p[1].replace(/%$/,""))};
- });
 }
 const THEME_KEY = "crypto-research-theme";
 function initialTheme(){
@@ -81,7 +73,6 @@ export default function App(){
  const [watch,setWatch]=useState(extraCoinIds.join("\n")),[raw,setRaw]=useState([]),[meta,setMeta]=useState(null);
  const [running,setRunning]=useState(false),[message,setMessage]=useState("Ready"),[filter,setFilter]=useState("all"),[search,setSearch]=useState("");
  const [sort,setSort]=useState({key:"displayRank",asc:true}),[copy,setCopy]=useState(null),[notice,setNotice]=useState("");
- const [budget,setBudget]=useState("100"),[rankInput,setRankInput]=useState("");
  const [progress,setProgress]=useState(null);
  const [entryRows,setEntryRows]=useState(null);
  const active=useRef(null);
@@ -229,11 +220,6 @@ export default function App(){
   const x=a[sort.key],y=b[sort.key];if(x==null)return y==null?0:1;if(y==null)return -1;
   return (typeof x==="number"&&typeof y==="number"?x-y:String(x).localeCompare(String(y)))*(sort.asc?1:-1);
  }),[data,filter,search,sort]);
- const result=useMemo(()=>{try{
-  const ranked=parseRanks(rankInput).map(r=>({...r,id:canonicalId(r.id.toLowerCase())}));
-  if(ranked.some(r=>knownCoin(r.id)))throw new Error("Legacy-only projects are excluded from new investment rounds.");
-  return {rows:allocate(/^\d+$/.test(budget)?Number(budget):NaN,ranked)};
- }catch(e){return {error:e.message};}},[budget,rankInput]);
  async function copyRows(text){
   setNotice("");setCopy(null);
   try{await copyText(text);setNotice("Copied. Paste into Excel with Ctrl+V.");}
@@ -242,7 +228,7 @@ export default function App(){
  const copyMarket=rows=>copyRows(tsv(columns.map(c=>c[0]),rows.map(r=>columns.map(c=>r[c[1]]))));
  return <main className="terminal">
   <header className="terminal-header">
-   <div><h1>Crypto Research Terminal</h1><p>Market snapshots and whole-dollar investment rounds</p></div>
+   <div><h1>Crypto Research Terminal</h1><p>Market snapshots and cryptocurrency research</p></div>
    <button type="button" className="theme-toggle" aria-label="Light mode" aria-pressed={theme==="light"} onClick={()=>setTheme(t=>t==="dark"?"light":"dark")}>
     <span aria-hidden="true">{theme==="dark"?"☀":"☾"}</span> {theme==="dark"?"Light mode":"Dark mode"}
    </button>
@@ -284,15 +270,6 @@ export default function App(){
   <p>{visible.length} displayed. ATH recovery is historical upside, not an expected return. Rank uses CoinGecko when possible, calculated market ranks when needed, and local watchlist positions after the selected market range. Original provider ranks are retained separately. Top 500 is not investment approval.</p>
   <div className="table-wrap"><table><thead><tr>{columns.map(([label,key])=><th key={key}><button onClick={()=>setSort(s=>({key,asc:s.key===key?!s.asc:true}))}>{label}{sort.key===key?(sort.asc?" ↑":" ↓"):""}</button></th>)}</tr></thead><tbody>{visible.map(c=><tr key={c.id} className={entryRows?.has(c.id)?"market-row-enter":undefined} style={entryRows?.has(c.id)?{"--entry-delay":entryRows.get(c.id)+"ms"}:undefined}>{columns.map(([,key])=><td key={key}>{cell(c[key])}</td>)}</tr>)}</tbody></table></div>
   </section>
-  <section className="allocator-section"><details className="allocator-details">
-   <summary><span className="allocator-title">Investment round allocator</span><span className="allocator-hint">Optional · Whole-dollar budget tool</span></summary>
-   <div className="allocator-content"><p>Paste 20 unique CoinGecko IDs and your researched expected ROI percentages from Excel. Ranked automatically; no trades are executed.</p>
-   <label>Whole-dollar round budget (USD)<input type="number" min="20" max="1000000" step="1" value={budget} onChange={e=>setBudget(e.target.value)}/></label>
-   <label>Coin ID and expected ROI %<textarea rows={8} value={rankInput} onChange={e=>setRankInput(e.target.value)} placeholder={"chainlink\t250\nsolana\t220\n..."} /></label>
-   {result.error?<p role="status">{result.error}</p>:<><p><strong>Total allocated: ${result.rows.reduce((s,r)=>s+r.amount,0)}</strong> · 20 coins</p><button onClick={()=>copyRows(tsv(["Rank","Coin ID","Expected ROI %","Investment USD"],result.rows.map(r=>[r.rank,r.id,r.roi,r.amount])))}>Copy allocation to Excel</button><div className="table-wrap"><table><thead><tr><th>Rank</th><th>Coin ID</th><th>Expected ROI %</th><th>Investment USD</th></tr></thead><tbody>{result.rows.map(r=><tr key={r.id}><td>{r.rank}</td><td>{r.id}</td><td>{r.roi}</td><td>{r.amount}</td></tr>)}</tbody></table></div></>}
-   <p>Minimum $1 per coin. Ties are possible at small budgets. Check exchange minimum orders, fees and spreads before buying.</p>
-   </div>
-  </details></section>
   {notice&&<p role="status">{notice}</p>}{copy!==null&&<textarea aria-label="Manual clipboard fallback" readOnly rows={8} value={copy} onFocus={e=>e.target.select()}/>}
  </main>;
 }
