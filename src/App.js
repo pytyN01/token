@@ -82,6 +82,7 @@ export default function App(){
  const [sort,setSort]=useState({key:"displayRank",asc:true}),[copy,setCopy]=useState(null),[notice,setNotice]=useState("");
  const [progress,setProgress]=useState(null);
  const [entryRows,setEntryRows]=useState(null);
+ const [entryRevealed,setEntryRevealed]=useState(false);
  const active=useRef(null);
  useEffect(()=>()=>active.current?.abort(),[]);
  useEffect(()=>{
@@ -91,8 +92,19 @@ export default function App(){
  },[running,progress]);
  useEffect(()=>{
   if(!entryRows)return undefined;
-  const timer=setTimeout(()=>setEntryRows(null),1300);
-  return ()=>clearTimeout(timer);
+  // Wait for the hidden table to paint before starting the stagger.
+  let revealFrame,cleanupTimer;
+  const paintFrame=requestAnimationFrame(()=>{
+   revealFrame=requestAnimationFrame(()=>{
+    setEntryRevealed(true);
+    cleanupTimer=setTimeout(()=>setEntryRows(null),2200);
+   });
+  });
+  return ()=>{
+   cancelAnimationFrame(paintFrame);
+   if(revealFrame!==undefined)cancelAnimationFrame(revealFrame);
+   if(cleanupTimer!==undefined)clearTimeout(cleanupTimer);
+  };
  },[entryRows]);
  async function scan(){
   if(active.current)return;
@@ -121,7 +133,7 @@ export default function App(){
    }
   };
   let firstBatchShown=false;
-  setRunning(true);setRaw([]);setMeta(null);setCopy(null);setNotice("");setEntryRows(null);publish({});
+  setRunning(true);setRaw([]);setMeta(null);setCopy(null);setNotice("");setEntryRevealed(false);setEntryRows(null);publish({});
   const save=(data,market)=>{
    const fetched=new Date().toISOString();
    for(const row of data){
@@ -261,7 +273,7 @@ export default function App(){
   <div className="controls compact-controls"><select aria-label="Filter" value={filter} onChange={e=>setFilter(e.target.value)}><option value="all">All collected</option><option value="top500">Top 500</option><option value="watch">Watchlist</option><option value="static">Historical only</option></select>
    <input aria-label="Search" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search name, symbol or ID"/>
    <button disabled={running||!meta||!data.length} onClick={()=>copyMarket(data)}>Copy all to Excel</button></div>
-  <div className="table-wrap"><table><thead><tr>{columns.map(([label,key])=><th key={key}><button onClick={()=>setSort(s=>({key,asc:s.key===key?!s.asc:true}))}>{label}{sort.key===key?(sort.asc?" ↑":" ↓"):""}</button></th>)}</tr></thead><tbody>{visible.map((c,index)=><tr key={c.id} className={entryRows?.has(c.id)?"market-row-enter":undefined} style={entryRows?.has(c.id)?{"--entry-delay":Math.min(index*45,800)+"ms"}:undefined}>{columns.map(([,key])=><td key={key}>{cell(c[key])}</td>)}</tr>)}</tbody></table></div>
+  <div className="table-wrap"><table><thead><tr>{columns.map(([label,key])=><th key={key}><button onClick={()=>setSort(s=>({key,asc:s.key===key?!s.asc:true}))}>{label}{sort.key===key?(sort.asc?" ↑":" ↓"):""}</button></th>)}</tr></thead><tbody className={entryRevealed?"market-rows-revealed":undefined}>{visible.map((c,index)=><tr key={c.id} className={entryRows?.has(c.id)?"market-row-enter":undefined} style={entryRows?.has(c.id)?{"--entry-delay":Math.min(index*100,1500)+"ms"}:undefined}>{columns.map(([,key])=><td key={key}>{cell(c[key])}</td>)}</tr>)}</tbody></table></div>
   </section>
   {notice&&<p role="status">{notice}</p>}{copy!==null&&<textarea aria-label="Manual clipboard fallback" readOnly rows={8} value={copy} onFocus={e=>e.target.select()}/>}
  </main>;

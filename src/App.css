@@ -93,15 +93,15 @@ tr:nth-child(even) { background: var(--stripe); }
   transition: width 180ms linear;
 }
 .market-row-enter {
-  animation: market-row-in 320ms ease-out var(--entry-delay, 0ms) both;
+  opacity: 0;
 }
-@keyframes market-row-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
+.market-rows-revealed > .market-row-enter {
+  opacity: 1;
+  transition: opacity 500ms ease-out var(--entry-delay, 0ms);
 }
 @media(prefers-reduced-motion: reduce) {
   .scan-progress-fill { transition: none; }
-  .market-row-enter { animation: none; }
+  .market-row-enter, .market-rows-revealed > .market-row-enter { opacity: 1; transition: none; }
 }
 .scan-percent { text-align: center; font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; margin-top: 8px; }
 .scan-progress p { margin: 4px 0; color: var(--muted); }
