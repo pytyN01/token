@@ -5,6 +5,7 @@ import {columns,enrich,tsv,copyText,cell,scanStatuses} from "./utils/market";
 import {extraCoinIds} from "./config/watchlist";
 import {canonicalId,lookupIds,annotateLive,positivePrice,staticFallback,knownCoin} from "./config/staticCoins";
 import {remainingMs,formatCountdown,retryDelay} from "./utils/scanTiming";
+import {rankCoverage,repairPages,improvesCoverage,researchStatus} from "./utils/rankCoverage";
 import "./App.css";
 
 const PAGE_SIZE=250;
@@ -84,7 +85,8 @@ export default function App(){
   if(active.current)return;
   const ctl=new AbortController();active.current=ctl;
   const sig=ctl.signal, id=new Date().toISOString(), wanted=include?[...new Set(watch.split(/[\s,]+/).filter(Boolean).map(canonicalId))]:[];
-  const seen=new Map(),marketSeen=new Set(),marketErrors=[],watchErrors=[],missing=[];
+  const seen=new Map(),marketSeen=new Set(),marketErrors=[],watchErrors=[],missing=[],marketPages=new Map(),repairNotes=[];
+  let recoveryAttempts=0,recoveryAccepted=0;
   let stage="market";
   let pagesOK=0,shortPages=0,duplicateCount=0;
   const pages=scope/PAGE_SIZE, step=pause*1000;
@@ -115,7 +117,10 @@ export default function App(){
     if(market){if(marketSeen.has(c.id))duplicateCount++;marketSeen.add(c.id);}
     const previous=seen.get(c.id);
     // Prefer a usable quote; when both aliases return data prefer the canonical provider ID.
-    if(!previous || (positivePrice(c)&&!positivePrice(previous)) || (positivePrice(c)===positivePrice(previous)&&(market||c.providerId===c.id)))seen.set(c.id,{...c,fetched});
+    if(!previous || (positivePrice(c)&&!positivePrice(previous)) || (positivePrice(c)===positivePrice(previous)&&(market||c.providerId===c.id))){
+     const rank=!market&&marketSeen.has(c.id)?previous?.market_cap_rank:c.market_cap_rank;
+     seen.set(c.id,{...c,market_cap_rank:rank,fetched,marketMember:marketSeen.has(c.id)});
+    }
    }
    setRaw([...seen.values()]);
   };
@@ -123,12 +128,42 @@ export default function App(){
    for(let page=1;page<=pages;page++){
     if(page>1)await waitFor(step);
     setMessage("Market page "+page+" / "+pages);
-    try{const data=await fetchBatch({page});save(data,true);pagesOK++;if(data.length!==PAGE_SIZE)shortPages++;}
+    try{const data=await fetchBatch({page});marketPages.set(page,data);save(data,true);pagesOK++;if(data.length!==PAGE_SIZE)shortPages++;}
     catch(e){if(sig.aborted)throw e;marketErrors.push("Page "+page+": "+(e.response?.status||e.message));if(e.response?.status===429)throw e;}
+   }
+   // Repair only pages associated with missing ranks. Keep original pages unless
+   // a replacement demonstrably improves coverage; do not manufacture ranks.
+   const normalized=(pageMap)=>[...pageMap.values()].flatMap(batch=>batch.map(row=>row?.id?annotateLive(row):null).filter(Boolean));
+   if(pagesOK===pages){
+    const targets=repairPages(rankCoverage(normalized(marketPages),scope),PAGE_SIZE);
+    publish({total:timing.total+targets.length});
+    for(const page of targets){
+     recoveryAttempts++;
+     await waitFor(step);
+     setMessage("Rechecking market page "+page+" for missing ranks");
+     try{
+      const batch=await fetchBatch({page});
+      const candidate=new Map(marketPages);
+      candidate.set(page,batch);
+      if(batch.length===PAGE_SIZE&&improvesCoverage(rankCoverage(normalized(marketPages),scope),rankCoverage(normalized(candidate),scope))){
+       marketPages.set(page,batch);
+       recoveryAccepted++;
+       repairNotes.push("Page "+page+" refreshed: coverage improved");
+      }else{repairNotes.push("Page "+page+" rechecked: original retained");}
+     }catch(e){
+      if(sig.aborted)throw e;
+      repairNotes.push("Page "+page+" recheck failed: "+(e.response?.status||e.message));
+      if(e.response?.status===429)throw e;
+     }
+    }
+    if(recoveryAccepted){
+     seen.clear();marketSeen.clear();duplicateCount=0;shortPages=0;
+     for(const batch of marketPages.values()){save(batch,true);if(batch.length!==PAGE_SIZE)shortPages++;}
+    }
    }
    stage="watchlist";
    const extra=lookupIds(wanted.filter(id=>!positivePrice(seen.get(id))));
-   publish({total:pages+Math.ceil(extra.length/50)});
+   publish({total:pages+recoveryAttempts+Math.ceil(extra.length/50)});
    for(let i=0;i<extra.length;i+=50){
     await waitFor(step);
     const batch=extra.slice(i,i+50);
@@ -139,23 +174,32 @@ export default function App(){
   }catch(e){if(!sig.aborted){(stage==="market"?marketErrors:watchErrors).push(e.message);}}
   finally{
    missing.push(...wanted.filter(x=>!positivePrice(seen.get(x))));
-   const ranks=new Set([...marketSeen].map(x=>seen.get(x)?.market_cap_rank));
-   const missingRanks=Array.from({length:scope},(_,i)=>i+1).filter(x=>!ranks.has(x));
+   const marketRows=[...marketSeen].map(x=>seen.get(x)).filter(Boolean);
+   const {missingRanks}=rankCoverage(marketRows,scope);
+   const research=researchStatus(marketRows,sig.aborted,stage);
    const {marketStatus,watchStatus}=scanStatuses({canceled:sig.aborted,stage,marketErrors,watchErrors,missing,pagesOK,pages,shortPages,duplicateCount,marketCount:marketSeen.size,scope,missingRanks,include});
    const fallbackIds=[];
    if(!sig.aborted){
     for(const coinId of missing){
      const fallback=staticFallback(coinId);
-     if(fallback){seen.set(coinId,fallback);fallbackIds.push(coinId);}
+     if(fallback){
+      if(marketSeen.has(coinId)){
+       // Retain the real market rank, even if a ranked record has no usable price.
+       seen.set(coinId,{...seen.get(coinId),current_price:null,priceFallback:"Historical metadata only"});
+      }else{
+       seen.set(coinId,fallback);
+       fallbackIds.push(coinId);
+      }
+     }
     }
    }
    const unresolved=missing.filter(x=>!fallbackIds.includes(x));
    setRaw([...seen.values()]);
-   setMeta({id,wanted,marketStatus,watchStatus,marketErrors,watchErrors,missing,fallbackIds,unresolved,pagesOK,pages,duplicateCount,shortPages,missingRanks,marketCount:marketSeen.size});
+   setMeta({id,wanted,marketStatus,watchStatus,marketErrors,watchErrors,missing,fallbackIds,unresolved,pagesOK,pages,duplicateCount,shortPages,missingRanks,marketCount:marketSeen.size,research,recoveryAttempts,recoveryAccepted,repairNotes});
    setMessage("Market: "+marketStatus+" · Watchlist: "+watchStatus+" — "+seen.size+" unique records ("+fallbackIds.length+" historical)");setRunning(false);setProgress(null);active.current=null;
   }
  }
- const data=useMemo(()=>raw.map(c=>enrich(c,meta?.id||"",new Set(meta?.wanted||[]),meta?.marketStatus||"In progress",meta?.watchStatus||"In progress")),[raw,meta]);
+ const data=useMemo(()=>raw.map(c=>enrich(c,meta?.id||"",new Set(meta?.wanted||[]),meta?.marketStatus||"In progress",meta?.watchStatus||"In progress",meta?.research.status||"In progress")),[raw,meta]);
  const visible=useMemo(()=>data.filter(c=>(filter==="all"||(filter==="top500"&&c.eligible==="Yes")||(filter==="watch"&&c.watchlist==="Yes")||(filter==="static"&&c.dataSource==="STATIC"))&&[c.id,c.name,c.symbol,c.legacyIds,c.providerId].some(x=>String(x||"").toLowerCase().includes(search.toLowerCase()))).sort((a,b)=>{
   const x=a[sort.key],y=b[sort.key];if(x==null)return y==null?0:1;if(y==null)return -1;
   return (typeof x==="number"&&typeof y==="number"?x-y:String(x).localeCompare(String(y)))*(sort.asc?1:-1);
@@ -191,7 +235,13 @@ export default function App(){
    <div className={meta.marketStatus==="Complete"?"report":"warning"}><strong>Market scan: {meta.marketStatus}</strong> · {meta.pagesOK}/{meta.pages} pages · {meta.marketCount} market coins · {meta.duplicateCount} duplicate rows · {meta.shortPages} short pages · {meta.missingRanks.length} missing ranks
    {!!meta.marketErrors.length&&<p>Market errors: {meta.marketErrors.join("; ")}</p>}
    {!!meta.missingRanks.length&&<p>Missing ranks: {meta.missingRanks.join(", ")}</p>}
-   {meta.marketStatus!=="Complete"&&<p>Incomplete market coverage: do not use as a complete investment universe.</p>}
+   {!!meta.recoveryAttempts&&<p>Targeted rechecks: {meta.recoveryAttempts} · Improved pages: {meta.recoveryAccepted}</p>}
+   {!!meta.repairNotes.length&&<p>{meta.repairNotes.join("; ")}</p>}
+   {meta.marketStatus!=="Complete"&&<p>Full market coverage is incomplete. Check the separate top-500 research status.</p>}
+   </div>
+   <div className={meta.research.status==="Complete"?"report":"warning"}><strong>Top 500 research coverage: {meta.research.status}</strong> · {meta.research.covered}/500 distinct ranks
+   {!!meta.research.missing.length&&<p>Missing research ranks: {meta.research.missing.join(", ")}</p>}
+   {meta.research.status!=="Complete"&&<p>Do not treat the research universe as complete.</p>}
    </div>
    <div className={["Complete","Skipped"].includes(meta.watchStatus)?"report":"warning"}><strong>Watchlist: {meta.watchStatus}</strong> · {meta.wanted.length-meta.missing.length}/{meta.wanted.length} live quotes · {meta.fallbackIds.length} historical fallback records
    {!!meta.watchErrors.length&&<p>Watchlist errors: {meta.watchErrors.join("; ")}</p>}
