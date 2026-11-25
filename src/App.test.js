@@ -1,12 +1,12 @@
 import {render,screen,fireEvent,act,cleanup} from "@testing-library/react";
 import React from "react";
 import axios from "axios";
-jest.mock("axios",()=>({get:jest.fn()}));
-beforeEach(()=>{jest.useFakeTimers();axios.get.mockReset();axios.get.mockImplementation(()=>new Promise(()=>{}));});
-afterEach(()=>{cleanup();jest.clearAllTimers();jest.useRealTimers();});
 import App from "./App";
 import {allocate} from "./utils/allocation";
 import {ratio,tsv,scanStatuses} from "./utils/market";
+jest.mock("axios",()=>({get:jest.fn()}));
+beforeEach(()=>{jest.useFakeTimers();axios.get.mockReset();axios.get.mockImplementation(()=>new Promise(()=>{}));});
+afterEach(()=>{cleanup();jest.clearAllTimers();jest.useRealTimers();});
 const rows=Array.from({length:20},(_,i)=>({id:"coin-"+i,roi:100-i}));
 test("renders scanner without the investment allocator",()=>{render(<App/>);expect(screen.getByRole("button",{name:"Reload market data"})).toBeInTheDocument();expect(screen.queryByText("Investment round allocator")).not.toBeInTheDocument();expect(screen.queryByLabelText("Whole-dollar round budget (USD)")).not.toBeInTheDocument();});
 test("100 dollar allocation matches agreed tiers",()=>expect(allocate(100,rows).map(r=>r.amount)).toEqual([8,6,6,6,6,5,5,5,5,5,5,5,5,4,4,4,4,4,4,4]));
@@ -70,8 +70,8 @@ test("automatically starts exactly one request in StrictMode and ignores disable
 test("failed scan enables retry but does not enable copying incomplete records",async()=>{
  axios.get.mockRejectedValue({response:{status:400}});
  render(<App/>);
- await act(async()=>{await jest.advanceTimersByTimeAsync(1);});
- for(let i=0;i<4;i++){await act(async()=>{await jest.advanceTimersByTimeAsync(12000);});}
+ await act(async()=>{jest.advanceTimersByTime(1);});
+ for(let i=0;i<4;i++){await act(async()=>{jest.advanceTimersByTime(12000);});}
  expect(screen.getByRole("button",{name:"Reload market data"})).toBeEnabled();
  expect(screen.getByRole("button",{name:"Copy all to Excel"})).toBeDisabled();
  expect(screen.getByRole("alert")).toHaveTextContent("Scan incomplete");
