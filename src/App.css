@@ -39,13 +39,12 @@ body { background: var(--page); color: var(--text); }
 .terminal { max-width: 1500px; margin: auto; padding: 24px; color: var(--text); }
 .terminal-header { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 12px; }
 .header-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
-.theme-toggle { flex-shrink: 0; white-space: nowrap; min-height: 40px; }
+.theme-toggle { flex-shrink: 0; }
 .icon-button { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; padding: 0; }
 .icon-button:disabled { opacity: .35; }
 .copy-notice, .scan-error { margin: 0 0 8px; font-size: 13px; color: var(--muted); }
 .scan-error { color: var(--warning-text); }
 .terminal section > p[role="status"] { margin: 0 0 8px; }
-.theme-toggle span { margin-right: 5px; }
 h1 { margin: 0; }
 .terminal section { background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 10px; padding: 12px; margin-bottom: 12px; }
 input, select, textarea, button { font: inherit; padding: 9px; border: 1px solid var(--control-border); border-radius: 5px; color: var(--text); background: var(--control); }

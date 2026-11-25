@@ -78,3 +78,15 @@ test("failed scan enables retry but does not enable copying incomplete records",
  fireEvent.click(screen.getByRole("button",{name:"Reload market data"}));
  expect(screen.getByRole("button",{name:"Reload market data"})).toBeDisabled();
 });
+
+test("theme toggle is icon-only and keeps an accessible name and action tooltip",()=>{
+ render(<App/>);
+ const toggle=screen.getByRole("button",{name:"Light mode"});
+ expect(toggle.textContent.trim()).toBe("");
+ expect(toggle).toHaveAttribute("title","Switch to light mode");
+ expect(toggle.querySelector("svg")).toBeInTheDocument();
+ fireEvent.click(toggle);
+ expect(toggle.textContent.trim()).toBe("");
+ expect(toggle).toHaveAttribute("title","Switch to dark mode");
+ expect(toggle).toHaveAttribute("aria-pressed","true");
+});

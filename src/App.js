@@ -267,8 +267,10 @@ export default function App(){
   <header className="terminal-header">
    <h1>Crypto Research Terminal</h1>
    <div className="header-actions">
-   <button type="button" className="theme-toggle" aria-label="Light mode" aria-pressed={theme==="light"} onClick={()=>setTheme(t=>t==="dark"?"light":"dark")}>
-    <span aria-hidden="true">{theme==="dark"?"☀":"☾"}</span> {theme==="dark"?"Light mode":"Dark mode"}
+   <button type="button" className="icon-button theme-toggle" title={theme==="dark"?"Switch to light mode":"Switch to dark mode"} aria-label="Light mode" aria-pressed={theme==="light"} onClick={()=>setTheme(t=>t==="dark"?"light":"dark")}>
+    <svg aria-hidden="true" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+     {theme==="dark"?<><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.65 17.65l1.42 1.42M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.65 6.35l1.42-1.42"/></>:<path d="M20.9 13.35A9 9 0 0 1 10.65 3.1 9 9 0 1 0 20.9 13.35Z"/>}
+    </svg>
    </button>
    <button type="button" className="icon-button" title="Copy all to Excel" aria-label="Copy all to Excel" disabled={!canCopy} onClick={()=>copyMarket(data)}>
     <svg aria-hidden="true" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>
