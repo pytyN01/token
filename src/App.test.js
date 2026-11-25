@@ -1,9 +1,14 @@
-import {render,screen,fireEvent} from "@testing-library/react";
+import {render,screen,fireEvent,act,cleanup} from "@testing-library/react";
+import React from "react";
+import axios from "axios";
+jest.mock("axios",()=>({get:jest.fn()}));
+beforeEach(()=>{jest.useFakeTimers();axios.get.mockReset();axios.get.mockImplementation(()=>new Promise(()=>{}));});
+afterEach(()=>{cleanup();jest.clearAllTimers();jest.useRealTimers();});
 import App from "./App";
 import {allocate} from "./utils/allocation";
 import {ratio,tsv,scanStatuses} from "./utils/market";
 const rows=Array.from({length:20},(_,i)=>({id:"coin-"+i,roi:100-i}));
-test("renders scanner without the investment allocator",()=>{render(<App/>);expect(screen.getByRole("button",{name:"Run market scan"})).toBeInTheDocument();expect(screen.queryByText("Investment round allocator")).not.toBeInTheDocument();expect(screen.queryByLabelText("Whole-dollar round budget (USD)")).not.toBeInTheDocument();});
+test("renders scanner without the investment allocator",()=>{render(<App/>);expect(screen.getByRole("button",{name:"Reload market data"})).toBeInTheDocument();expect(screen.queryByText("Investment round allocator")).not.toBeInTheDocument();expect(screen.queryByLabelText("Whole-dollar round budget (USD)")).not.toBeInTheDocument();});
 test("100 dollar allocation matches agreed tiers",()=>expect(allocate(100,rows).map(r=>r.amount)).toEqual([8,6,6,6,6,5,5,5,5,5,5,5,5,4,4,4,4,4,4,4]));
 test.each([20,21,75,99,101,125,250,1000])("integer budget %s",budget=>{const a=allocate(budget,rows);expect(a.reduce((s,r)=>s+r.amount,0)).toBe(budget);expect(a.every(r=>Number.isInteger(r.amount)&&r.amount>=1)).toBe(true);});
 test("rejects invalid budgets and duplicate IDs",()=>{expect(()=>allocate(19,rows)).toThrow();expect(()=>allocate(100.5,rows)).toThrow();expect(()=>allocate(100,[...rows.slice(0,19),rows[0]])).toThrow();});
@@ -22,14 +27,12 @@ test("defaults to dark mode and switches without remounting the scanner",()=>{
  window.localStorage.removeItem(themeKey);
  render(<App/>);
  expect(document.documentElement.dataset.theme).toBe("dark");
- const search=screen.getByRole("textbox",{name:"Search"});
- fireEvent.change(search,{target:{value:"bitcoin"}});
  const toggle=screen.getByRole("button",{name:"Light mode"});
  expect(toggle).toHaveAttribute("aria-pressed","false");
  fireEvent.click(toggle);
  expect(document.documentElement.dataset.theme).toBe("light");
  expect(window.localStorage.getItem(themeKey)).toBe("light");
- expect(search).toHaveValue("bitcoin");
+ expect(screen.getByRole("button",{name:"Reload market data"})).toBeDisabled();
  expect(toggle).toHaveAttribute("aria-pressed","true");
  fireEvent.click(toggle);
  expect(document.documentElement.dataset.theme).toBe("dark");
@@ -42,15 +45,36 @@ test("restores a saved light theme",()=>{
 });
 
 
-test("renders the compact scanner controls without removed elements",()=>{
+test("renders only the header actions; copy and reload are initially disabled",()=>{
  render(<App/>);
- expect(screen.getByRole("button",{name:"Run market scan"})).toBeInTheDocument();
- expect(screen.getByRole("button",{name:"Copy all to Excel"})).toBeInTheDocument();
- expect(screen.getByRole("combobox",{name:"Filter"})).toBeInTheDocument();
- expect(screen.getByRole("textbox",{name:"Search"})).toBeInTheDocument();
- expect(screen.queryByRole("heading",{name:"Market scanner"})).not.toBeInTheDocument();
- expect(screen.queryByText("Market snapshots and cryptocurrency research")).not.toBeInTheDocument();
- expect(screen.queryByRole("button",{name:"Cancel"})).not.toBeInTheDocument();
- expect(screen.queryByRole("button",{name:"Copy filtered to Excel"})).not.toBeInTheDocument();
- expect(screen.queryByRole("status")).not.toBeInTheDocument();
+ expect(screen.getByRole("button",{name:"Copy all to Excel"})).toBeDisabled();
+ expect(screen.getByRole("button",{name:"Reload market data"})).toBeDisabled();
+ expect(screen.getByRole("button",{name:"Light mode"})).toBeEnabled();
+ expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+ expect(screen.queryByRole("textbox",{name:"Search"})).not.toBeInTheDocument();
+ expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+ expect(screen.queryByText("Watchlist coin IDs (editable)")).not.toBeInTheDocument();
+ expect(screen.queryByRole("button",{name:"Run market scan"})).not.toBeInTheDocument();
+});
+test("automatically starts exactly one request in StrictMode and ignores disabled actions",()=>{
+ render(<React.StrictMode><App/></React.StrictMode>);
+ act(()=>{jest.advanceTimersByTime(1);});
+ expect(axios.get).toHaveBeenCalledTimes(1);
+ expect(axios.get).toHaveBeenCalledWith("/api/crypto",expect.objectContaining({params:{page:1}}));
+ fireEvent.click(screen.getByRole("button",{name:"Reload market data"}));
+ fireEvent.click(screen.getByRole("button",{name:"Copy all to Excel"}));
+ fireEvent.click(screen.getByRole("button",{name:"Light mode"}));
+ expect(axios.get).toHaveBeenCalledTimes(1);
+ expect(screen.getByRole("button",{name:"Reload market data"})).toBeDisabled();
+});
+test("failed scan enables retry but does not enable copying incomplete records",async()=>{
+ axios.get.mockRejectedValue({response:{status:400}});
+ render(<App/>);
+ await act(async()=>{await jest.advanceTimersByTimeAsync(1);});
+ for(let i=0;i<4;i++){await act(async()=>{await jest.advanceTimersByTimeAsync(12000);});}
+ expect(screen.getByRole("button",{name:"Reload market data"})).toBeEnabled();
+ expect(screen.getByRole("button",{name:"Copy all to Excel"})).toBeDisabled();
+ expect(screen.getByRole("alert")).toHaveTextContent("Scan incomplete");
+ fireEvent.click(screen.getByRole("button",{name:"Reload market data"}));
+ expect(screen.getByRole("button",{name:"Reload market data"})).toBeDisabled();
 });

@@ -1,4 +1,4 @@
-import React,{useState,useRef,useEffect,useMemo} from "react";
+import React,{useState,useRef,useEffect,useMemo,useCallback} from "react";
 import axios from "axios";
 import {columns,enrich,tsv,copyText,cell,scanStatuses} from "./utils/market";
 import {extraCoinIds} from "./config/watchlist";
@@ -8,6 +8,8 @@ import {rankCoverage,repairPages,improvesCoverage,researchStatus,assignDisplayRa
 import "./App.css";
 
 const PAGE_SIZE=250;
+const scope=1000, pause=12, include=true;
+const wantedIds=[...new Set(extraCoinIds.map(canonicalId))];
 const delay=(ms,signal)=>new Promise((resolve,reject)=>{
  if(signal.aborted){reject(new Error("Canceled"));return;}
  const abort=()=>{clearTimeout(timer);reject(new Error("Canceled"));};
@@ -76,15 +78,13 @@ export default function App(){
   if(meta)meta.setAttribute("content",theme==="dark"?"#000000":"#f4f6f8");
   try {window.localStorage.setItem(THEME_KEY,theme);} catch {/* Theme still works without storage. */}
  },[theme]);
- const [scope,setScope]=useState(1000),[pause,setPause]=useState(12),[include,setInclude]=useState(true);
- const [watch,setWatch]=useState(extraCoinIds.join("\n")),[raw,setRaw]=useState([]),[meta,setMeta]=useState(null);
- const [running,setRunning]=useState(false),[message,setMessage]=useState("Ready"),[filter,setFilter]=useState("all"),[search,setSearch]=useState("");
+ const [raw,setRaw]=useState([]),[meta,setMeta]=useState(null);
+ const [running,setRunning]=useState(true),[message,setMessage]=useState("Starting market scan…");
  const [sort,setSort]=useState({key:"displayRank",asc:true}),[copy,setCopy]=useState(null),[notice,setNotice]=useState("");
  const [progress,setProgress]=useState(null);
  const [entryRows,setEntryRows]=useState(null);
  const [entryRevealed,setEntryRevealed]=useState(false);
  const active=useRef(null);
- useEffect(()=>()=>active.current?.abort(),[]);
  useEffect(()=>{
   if(running||!progress?.finished)return undefined;
   const timer=setTimeout(()=>setProgress(null),650);
@@ -109,10 +109,10 @@ export default function App(){
    if(cleanupTimer!==undefined)clearTimeout(cleanupTimer);
   };
  },[entryRows]);
- async function scan(){
+ const scan=useCallback(async()=>{
   if(active.current)return;
   const ctl=new AbortController();active.current=ctl;
-  const sig=ctl.signal, id=new Date().toISOString(), wanted=include?[...new Set(watch.split(/[\s,]+/).filter(Boolean).map(canonicalId))]:[];
+  const sig=ctl.signal, id=new Date().toISOString(), wanted=wantedIds;
   const seen=new Map(),marketSeen=new Set(),marketErrors=[],watchErrors=[],missing=[],marketPages=new Map(),repairNotes=[];
   let recoveryAttempts=0,recoveryAccepted=0;
   let stage="market";
@@ -244,38 +244,45 @@ export default function App(){
    else{setProgress(null);}
    active.current=null;
   }
- }
+ },[]);
+ useEffect(()=>{
+  // Defer the first request so React StrictMode can clean up its rehearsal mount.
+  const timer=setTimeout(()=>{scan();},0);
+  return ()=>{clearTimeout(timer);active.current?.abort();};
+ },[scan]);
  const data=useMemo(()=>raw.map(c=>enrich(c,meta?.id||"",new Set(meta?.wanted||[]),meta?.marketStatus||"In progress",meta?.watchStatus||"In progress",meta?.research.status||"In progress")),[raw,meta]);
- const visible=useMemo(()=>data.filter(c=>(filter==="all"||(filter==="top500"&&c.eligible==="Yes")||(filter==="watch"&&c.watchlist==="Yes")||(filter==="static"&&c.dataSource==="STATIC"))&&[c.id,c.name,c.symbol,c.legacyIds,c.providerId].some(x=>String(x||"").toLowerCase().includes(search.toLowerCase()))).sort((a,b)=>{
+ const visible=useMemo(()=>[...data].sort((a,b)=>{
   const x=a[sort.key],y=b[sort.key];if(x==null)return y==null?0:1;if(y==null)return -1;
   return (typeof x==="number"&&typeof y==="number"?x-y:String(x).localeCompare(String(y)))*(sort.asc?1:-1);
- }),[data,filter,search,sort]);
+ }),[data,sort]);
  async function copyRows(text){
   setNotice("");setCopy(null);
   try{await copyText(text);setNotice("Copied. Paste into Excel with Ctrl+V.");}
   catch{setCopy(text);setNotice("Automatic clipboard unavailable. Select the text below and press Ctrl+C.");}
  }
  const copyMarket=rows=>copyRows(tsv(columns.map(c=>c[0]),rows.map(r=>columns.map(c=>r[c[1]]))));
+ const canCopy=Boolean(!running&&meta?.marketStatus.startsWith("Complete")&&meta.unresolved.length===0&&data.length);
+ const canReload=!running&&Boolean(meta);
  return <main className="terminal">
   <header className="terminal-header">
    <h1>Crypto Research Terminal</h1>
+   <div className="header-actions">
    <button type="button" className="theme-toggle" aria-label="Light mode" aria-pressed={theme==="light"} onClick={()=>setTheme(t=>t==="dark"?"light":"dark")}>
     <span aria-hidden="true">{theme==="dark"?"☀":"☾"}</span> {theme==="dark"?"Light mode":"Dark mode"}
    </button>
+   <button type="button" className="icon-button" title="Copy all to Excel" aria-label="Copy all to Excel" disabled={!canCopy} onClick={()=>copyMarket(data)}>
+    <svg aria-hidden="true" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>
+   </button>
+   <button type="button" className="icon-button" title="Reload market data" aria-label="Reload market data" disabled={!canReload} onClick={scan}>
+    <svg aria-hidden="true" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M5.4 8a8 8 0 0 1 13.2-3L20 7M4 17l1.4 2A8 8 0 0 0 18.6 16"/></svg>
+   </button>
+   </div>
   </header>
-  <section aria-label="Market scanner"><div className="controls">
-   <label>Market coverage<select disabled={running} value={scope} onChange={e=>setScope(Number(e.target.value))}>{[500,1000,2000,3000].map(n=><option key={n} value={n}>Top {n.toLocaleString()}</option>)}</select></label>
-   <label>Request delay<select disabled={running} value={pause} onChange={e=>setPause(Number(e.target.value))}>{[5,10,12,15,20,30,60].map(n=><option key={n} value={n}>{n} seconds{n===12?" (default)":n<12?" (faster, higher risk)":""}</option>)}</select></label>
-   <label className="check"><input type="checkbox" checked={include} disabled={running} onChange={e=>setInclude(e.target.checked)}/> Include watchlist</label>
-   <button disabled={running} onClick={scan}>Run market scan</button>
-  </div>
-  {include&&<details><summary>Watchlist coin IDs (editable)</summary><textarea disabled={running} rows={5} value={watch} onChange={e=>setWatch(e.target.value)}/></details>}
+  {notice&&<p className="copy-notice" role="status">{notice}</p>}
+  <section aria-label="Market scanner">
   {running&&<p role="status">{message} · {raw.length} loaded</p>}
   {progress&&(running||progress.finished)&&<ScanCountdown progress={progress}/>}
-  {!running&&meta&&raw.length===0&&<p role="alert">No records loaded. Please run the scan again.{meta.marketErrors.length>0?" "+meta.marketErrors.join("; "):""}</p>}
-  <div className="controls compact-controls"><select aria-label="Filter" value={filter} onChange={e=>setFilter(e.target.value)}><option value="all">All collected</option><option value="top500">Top 500</option><option value="watch">Watchlist</option><option value="static">Historical only</option></select>
-   <input aria-label="Search" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search name, symbol or ID"/>
-   <button disabled={running||!meta||!data.length} onClick={()=>copyMarket(data)}>Copy all to Excel</button></div>
+  {!running&&meta&&!canCopy&&<p className="scan-error" role="alert">Scan incomplete. Reload market data to retry.{meta.marketErrors.length>0?" "+meta.marketErrors.join("; "):""}{meta.unresolved.length>0?" Unresolved watchlist: "+meta.unresolved.join(", "):""}</p>}
   <div className="table-wrap"><table><thead><tr>{columns.map(([label,key])=><th key={key}><button onClick={()=>setSort(s=>({key,asc:s.key===key?!s.asc:true}))}>{label}{sort.key===key?(sort.asc?" ↑":" ↓"):""}</button></th>)}</tr></thead><tbody className={entryRevealed?"market-data-revealed":undefined}>{visible.map((c,index)=>{
    const entering=entryRows?.has(c.id);
    return <tr key={c.id} className={entering?"market-data-enter":undefined} style={entering?{"--entry-delay":Math.min(index*110,1800)+"ms"}:undefined}>
@@ -283,6 +290,6 @@ export default function App(){
    </tr>;
   })}</tbody></table></div>
   </section>
-  {notice&&<p role="status">{notice}</p>}{copy!==null&&<textarea aria-label="Manual clipboard fallback" readOnly rows={8} value={copy} onFocus={e=>e.target.select()}/>}
+  {copy!==null&&<textarea aria-label="Manual clipboard fallback" readOnly rows={8} value={copy} onFocus={e=>e.target.select()}/>}
  </main>;
 }
