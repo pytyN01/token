@@ -37,13 +37,17 @@
 * { box-sizing: border-box; }
 body { background: var(--page); color: var(--text); }
 .terminal { max-width: 1500px; margin: auto; padding: 24px; color: var(--text); }
-.terminal-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 24px; }
-.terminal-header p { color: var(--muted); margin-bottom: 0; }
+.terminal-header { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 12px; }
 .theme-toggle { flex-shrink: 0; white-space: nowrap; }
 .theme-toggle span { margin-right: 5px; }
-h1, h2 { margin: 0 0 12px; }
+h1 { margin: 0; }
 .terminal section { background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 10px; padding: 18px; margin-bottom: 18px; }
-.controls { display: flex; gap: 12px; align-items: end; flex-wrap: wrap; margin: 12px 0; }
+.controls { display: flex; gap: 12px; align-items: end; flex-wrap: wrap; margin: 0 0 8px; }
+.controls label { margin: 0; }
+.controls .check { align-self: flex-end; min-height: 40px; }
+.compact-controls { align-items: center; margin: 12px 0 8px; }
+.compact-controls input, .compact-controls select { min-width: 180px; max-width: 100%; }
+@media(max-width: 600px) { .compact-controls input, .compact-controls select { min-width: 0; flex: 1 1 140px; } }
 label { display: flex; flex-direction: column; gap: 6px; font-weight: 600; margin: 8px 0; }
 .check { flex-direction: row; align-items: center; }
 input, select, textarea, button { font: inherit; padding: 9px; border: 1px solid var(--control-border); border-radius: 5px; color: var(--text); background: var(--control); }
@@ -53,14 +57,12 @@ button { background: var(--button); cursor: pointer; }
 button:not(:disabled):hover { background: var(--button-hover); }
 button:disabled { opacity: .5; cursor: default; }
 button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-.table-wrap { max-height: 560px; overflow: auto; border: 1px solid var(--border); margin: 12px 0; }
+.table-wrap { max-height: 560px; overflow: auto; border: 1px solid var(--border); margin: 8px 0 0; }
 table { border-collapse: collapse; width: 100%; white-space: nowrap; font-size: 13px; color: var(--text); background: var(--panel); }
 th, td { padding: 9px; border-bottom: 1px solid var(--border); text-align: left; color: var(--text); }
 th { position: sticky; top: 0; background: var(--heading); }
 th button { border: none; background: transparent; padding: 0; font-weight: 600; }
 tr:nth-child(even) { background: var(--stripe); }
-.report, .warning { padding: 10px; border: 1px solid var(--control-border); border-radius: 5px; margin: 8px 0; }
-.warning { border-color: var(--warning-border); color: var(--warning-text); background: var(--warning-bg); }
 @media(max-width:600px) {
   .terminal { padding: 10px; }
   .terminal section { padding: 12px; }

@@ -228,46 +228,24 @@ export default function App(){
  const copyMarket=rows=>copyRows(tsv(columns.map(c=>c[0]),rows.map(r=>columns.map(c=>r[c[1]]))));
  return <main className="terminal">
   <header className="terminal-header">
-   <div><h1>Crypto Research Terminal</h1><p>Market snapshots and cryptocurrency research</p></div>
+   <h1>Crypto Research Terminal</h1>
    <button type="button" className="theme-toggle" aria-label="Light mode" aria-pressed={theme==="light"} onClick={()=>setTheme(t=>t==="dark"?"light":"dark")}>
     <span aria-hidden="true">{theme==="dark"?"☀":"☾"}</span> {theme==="dark"?"Light mode":"Dark mode"}
    </button>
   </header>
-  <section><h2>Market scanner</h2><div className="controls">
+  <section aria-label="Market scanner"><div className="controls">
    <label>Market coverage<select disabled={running} value={scope} onChange={e=>setScope(Number(e.target.value))}>{[500,1000,2000,3000].map(n=><option key={n} value={n}>Top {n.toLocaleString()}</option>)}</select></label>
    <label>Request delay<select disabled={running} value={pause} onChange={e=>setPause(Number(e.target.value))}>{[5,10,12,15,20,30,60].map(n=><option key={n} value={n}>{n} seconds{n===12?" (default)":n<12?" (faster, higher risk)":""}</option>)}</select></label>
    <label className="check"><input type="checkbox" checked={include} disabled={running} onChange={e=>setInclude(e.target.checked)}/> Include watchlist</label>
-   <button disabled={running} onClick={scan}>Run market scan</button><button disabled={!running} onClick={()=>active.current?.abort()}>Cancel</button>
+   <button disabled={running} onClick={scan}>Run market scan</button>
   </div>
   {include&&<details><summary>Watchlist coin IDs (editable)</summary><textarea disabled={running} rows={5} value={watch} onChange={e=>setWatch(e.target.value)}/></details>}
-  <p role="status">{message} {running&&" · "+raw.length+" loaded"}</p>
+  {running&&<p role="status">{message} · {raw.length} loaded</p>}
   {running&&progress&&<ScanCountdown progress={progress}/>}
-  {meta&&<>
-   <div className={meta.marketStatus.startsWith("Complete")?"report":"warning"}><strong>Market scan: {meta.marketStatus}</strong> · {meta.pagesOK}/{meta.pages} pages · {meta.marketCount} market coins · {meta.duplicateCount} duplicate rows · {meta.shortPages} short pages · {meta.missingRanks.length} missing ranks
-   {!!meta.marketErrors.length&&<p>Market errors: {meta.marketErrors.join("; ")}</p>}
-   {!!meta.missingRanks.length&&<p>Missing local ranks (insufficient market records): {meta.missingRanks.join(", ")}</p>}
-   <p>Calculated market ranks: {meta.fallbackRanks} · CoinGecko rank gaps before fallback: {meta.providerMissingRanks.length}</p>
-   {!!meta.providerMissingRanks.length&&<p>Original provider gaps: {meta.providerMissingRanks.join(", ")}</p>}
-   {!!meta.recoveryAttempts&&<p>Targeted rechecks: {meta.recoveryAttempts} · Improved pages: {meta.recoveryAccepted}</p>}
-   {!!meta.repairNotes.length&&<p>{meta.repairNotes.join("; ")}</p>}
-   {!meta.marketStatus.startsWith("Complete")&&<p>Full market coverage is incomplete. Check the separate top-500 research status.</p>}
-   </div>
-   <div className={meta.research.status.startsWith("Complete")?"report":"warning"}><strong>Top 500 research coverage: {meta.research.status}</strong> · {meta.research.covered}/500 distinct local ranks · {meta.researchFallbacks} calculated
-   {!!meta.research.missing.length&&<p>Missing research ranks: {meta.research.missing.join(", ")}</p>}
-   {meta.researchFallbacks>0&&<p>CoinGecko-confirmed coverage: {meta.providerResearch.covered}/500. Calculated ranks require verification before investing.</p>}
-   {!meta.research.status.startsWith("Complete")&&<p>Do not treat the research universe as complete.</p>}
-   </div>
-   <div className={["Complete","Skipped"].includes(meta.watchStatus)?"report":"warning"}><strong>Watchlist: {meta.watchStatus}</strong> · {meta.wanted.length-meta.missing.length}/{meta.wanted.length} live quotes · {meta.fallbackIds.length} historical fallback records
-   {!!meta.watchErrors.length&&<p>Watchlist errors: {meta.watchErrors.join("; ")}</p>}
-   {!!meta.fallbackIds.length&&<p>Historical fallback (no usable live price): {meta.fallbackIds.join(", ")}</p>}
-   {!!meta.unresolved.length&&<p>Unresolved watchlist IDs: {meta.unresolved.join(", ")}</p>}
-   {meta.watchStatus==="Partial"&&<p>Historical records have blank current prices and do not invalidate a complete market scan.</p>}
-   </div>
-  </>}
-  <div className="controls"><label>Filter<select value={filter} onChange={e=>setFilter(e.target.value)}><option value="all">All collected</option><option value="top500">Top 500</option><option value="watch">Watchlist</option><option value="static">Historical only</option></select></label>
-   <label>Search<input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Name, symbol or ID"/></label>
-   <button disabled={running||!meta||!data.length} onClick={()=>copyMarket(data)}>Copy all to Excel</button><button disabled={running||!meta||!visible.length} onClick={()=>copyMarket(visible)}>Copy filtered to Excel</button></div>
-  <p>{visible.length} displayed. ATH recovery is historical upside, not an expected return. Rank uses CoinGecko when possible, calculated market ranks when needed, and local watchlist positions after the selected market range. Original provider ranks are retained separately. Top 500 is not investment approval.</p>
+  {!running&&meta&&raw.length===0&&<p role="alert">No records loaded. Please run the scan again.{meta.marketErrors.length>0?" "+meta.marketErrors.join("; "):""}</p>}
+  <div className="controls compact-controls"><select aria-label="Filter" value={filter} onChange={e=>setFilter(e.target.value)}><option value="all">All collected</option><option value="top500">Top 500</option><option value="watch">Watchlist</option><option value="static">Historical only</option></select>
+   <input aria-label="Search" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search name, symbol or ID"/>
+   <button disabled={running||!meta||!data.length} onClick={()=>copyMarket(data)}>Copy all to Excel</button></div>
   <div className="table-wrap"><table><thead><tr>{columns.map(([label,key])=><th key={key}><button onClick={()=>setSort(s=>({key,asc:s.key===key?!s.asc:true}))}>{label}{sort.key===key?(sort.asc?" ↑":" ↓"):""}</button></th>)}</tr></thead><tbody>{visible.map(c=><tr key={c.id} className={entryRows?.has(c.id)?"market-row-enter":undefined} style={entryRows?.has(c.id)?{"--entry-delay":entryRows.get(c.id)+"ms"}:undefined}>{columns.map(([,key])=><td key={key}>{cell(c[key])}</td>)}</tr>)}</tbody></table></div>
   </section>
   {notice&&<p role="status">{notice}</p>}{copy!==null&&<textarea aria-label="Manual clipboard fallback" readOnly rows={8} value={copy} onFocus={e=>e.target.select()}/>}

@@ -22,7 +22,7 @@ test("defaults to dark mode and switches without remounting the scanner",()=>{
  window.localStorage.removeItem(themeKey);
  render(<App/>);
  expect(document.documentElement.dataset.theme).toBe("dark");
- const search=screen.getByPlaceholderText("Name, symbol or ID");
+ const search=screen.getByRole("textbox",{name:"Search"});
  fireEvent.change(search,{target:{value:"bitcoin"}});
  const toggle=screen.getByRole("button",{name:"Light mode"});
  expect(toggle).toHaveAttribute("aria-pressed","false");
@@ -41,3 +41,16 @@ test("restores a saved light theme",()=>{
  expect(screen.getByRole("button",{name:"Light mode"})).toHaveAttribute("aria-pressed","true");
 });
 
+
+test("renders the compact scanner controls without removed elements",()=>{
+ render(<App/>);
+ expect(screen.getByRole("button",{name:"Run market scan"})).toBeInTheDocument();
+ expect(screen.getByRole("button",{name:"Copy all to Excel"})).toBeInTheDocument();
+ expect(screen.getByRole("combobox",{name:"Filter"})).toBeInTheDocument();
+ expect(screen.getByRole("textbox",{name:"Search"})).toBeInTheDocument();
+ expect(screen.queryByRole("heading",{name:"Market scanner"})).not.toBeInTheDocument();
+ expect(screen.queryByText("Market snapshots and cryptocurrency research")).not.toBeInTheDocument();
+ expect(screen.queryByRole("button",{name:"Cancel"})).not.toBeInTheDocument();
+ expect(screen.queryByRole("button",{name:"Copy filtered to Excel"})).not.toBeInTheDocument();
+ expect(screen.queryByRole("status")).not.toBeInTheDocument();
+});

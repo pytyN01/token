@@ -10,8 +10,8 @@ React / Create React App with a Vercel serverless endpoint at `api/crypto.js`. N
 
 ## Workflow
 1. Choose coverage (default 1,000) and request delay (default 12 seconds). Run manually.
-2. Check scan status, missing ranks, duplicates, and watchlist IDs. Public CoinGecko access may be rate limited; retry/backoff is included. A multi-page scan is not an atomic market snapshot.
-3. Copy all or filtered rows to Excel, including headers. Paste into a new historical snapshot rather than overwriting old data. Excel has approximately 15 significant digits of numeric precision; import identifiers or exact values as text if necessary. Provider missing values remain blank. The watchlist is the original deduplicated list, not a verified mapping of all legacy holdings.
+2. Review scan and research status in the results/Excel columns. The compact interface omits the detailed completion panels. Public CoinGecko access may be rate limited; retry/backoff is included. A multi-page scan is not an atomic market snapshot.
+3. Copy all rows to Excel, including headers. Filtering and search affect the on-screen table only. Paste into a new historical snapshot rather than overwriting old data. Excel has approximately 15 significant digits of numeric precision; import identifiers or exact values as text if necessary. Provider missing values remain blank. The watchlist is the original deduplicated list, not a verified mapping of all legacy holdings.
 4. Evaluate project fundamentals, expected ROI, and investment allocations in Excel. The website is a market-data scanner only. See [Excel allocation specification](docs/excel-allocation.md) for the planned whole-dollar allocation rules.
 5. The scanner does not make trades. A top-500 rank is only a research-universe flag. ATH upside is not expected ROI. Exchange order minimums may exceed allocations.
 
@@ -37,3 +37,6 @@ The dark theme uses a Vercel-inspired black/charcoal palette. Light mode and the
 
 ## Interface polish
 The progress bar animates actual completed request batches with a continuous activity shimmer; it does not simulate completed requests. The first successful market batch fades in with a capped stagger, and subsequent results render immediately. Both animations respect reduced-motion preferences. The investment allocator has been removed from the website; allocation rules are retained for the future Excel workbook.
+
+## Compact scanner layout
+The subtitle, section heading, cancel button, completed status line, detailed completion panels, visible filter/search labels, filtered-copy button and explanatory paragraph have been removed. Progress/countdown remains visible during a scan. A short error notice is shown if no records load. The scan validation logic, rank/source fields, all-copy functionality and Excel schema are unchanged.
