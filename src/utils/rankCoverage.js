@@ -25,3 +25,32 @@ export function researchStatus(rows, canceled, stage){
  const uniqueIds=new Set(ranked.map(r=>r.id));
  return {status:canceled&&stage==="market"&&c.top500Missing.length?"Canceled":c.top500Missing.length||ranked.length!==500||uniqueIds.size!==500?"Partial":"Complete",covered:500-c.top500Missing.length,missing:c.top500Missing};
 }
+
+// Local display ranks fill gaps only with actual fetched records. Provider rank stays unchanged.
+export function assignDisplayRanks(rows,scope){
+ const validRank=r=>Number.isSafeInteger(r)&&r>0;
+ const cap=c=>typeof c.market_cap==="number"&&Number.isFinite(c.market_cap)&&c.market_cap>0?c.market_cap:-1;
+ const byCap=(a,b)=>cap(b)-cap(a)||a.id.localeCompare(b.id);
+ const market=rows.filter(c=>c.marketMember===true).sort(byCap);
+ const extras=rows.filter(c=>c.marketMember!==true).sort((a,b)=>{
+  if(a.dataSource!==b.dataSource)return a.dataSource==="STATIC"?1:b.dataSource==="STATIC"?-1:byCap(a,b);
+  return byCap(a,b);
+ });
+ const assigned=new Map(),used=new Set(),pending=[];
+ for(const c of market){
+  const r=c.market_cap_rank;
+  if(validRank(r)&&r<=scope&&!used.has(r)){
+   assigned.set(c.id,{displayRank:r,rankSource:"COINGECKO"});used.add(r);
+  }else pending.push(c);
+ }
+ let next=1;
+ for(const c of pending){
+  while(used.has(next))next++;
+  assigned.set(c.id,{displayRank:next,rankSource:"FALLBACK"});used.add(next);
+ }
+ let extraRank=Math.max(scope,...used)+1;
+ for(const c of extras){
+  assigned.set(c.id,{displayRank:extraRank++,rankSource:"WATCHLIST POSITION"});
+ }
+ return rows.map(c=>({...c,...assigned.get(c.id)}));
+}

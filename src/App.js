@@ -5,7 +5,7 @@ import {columns,enrich,tsv,copyText,cell,scanStatuses} from "./utils/market";
 import {extraCoinIds} from "./config/watchlist";
 import {canonicalId,lookupIds,annotateLive,positivePrice,staticFallback,knownCoin} from "./config/staticCoins";
 import {remainingMs,formatCountdown,retryDelay} from "./utils/scanTiming";
-import {rankCoverage,repairPages,improvesCoverage,researchStatus} from "./utils/rankCoverage";
+import {rankCoverage,repairPages,improvesCoverage,researchStatus,assignDisplayRanks} from "./utils/rankCoverage";
 import "./App.css";
 
 const PAGE_SIZE=250;
@@ -70,13 +70,13 @@ export default function App(){
  useEffect(()=>{
   document.documentElement.dataset.theme=theme;
   const meta=document.querySelector('meta[name="theme-color"]');
-  if(meta)meta.setAttribute("content",theme==="dark"?"#0d1117":"#f4f6f8");
+  if(meta)meta.setAttribute("content",theme==="dark"?"#000000":"#f4f6f8");
   try {window.localStorage.setItem(THEME_KEY,theme);} catch {/* Theme still works without storage. */}
  },[theme]);
  const [scope,setScope]=useState(1000),[pause,setPause]=useState(12),[include,setInclude]=useState(true);
  const [watch,setWatch]=useState(extraCoinIds.join("\n")),[raw,setRaw]=useState([]),[meta,setMeta]=useState(null);
  const [running,setRunning]=useState(false),[message,setMessage]=useState("Ready"),[filter,setFilter]=useState("all"),[search,setSearch]=useState("");
- const [sort,setSort]=useState({key:"market_cap_rank",asc:true}),[copy,setCopy]=useState(null),[notice,setNotice]=useState("");
+ const [sort,setSort]=useState({key:"displayRank",asc:true}),[copy,setCopy]=useState(null),[notice,setNotice]=useState("");
  const [budget,setBudget]=useState("100"),[rankInput,setRankInput]=useState("");
  const [progress,setProgress]=useState(null);
  const active=useRef(null);
@@ -175,9 +175,8 @@ export default function App(){
   finally{
    missing.push(...wanted.filter(x=>!positivePrice(seen.get(x))));
    const marketRows=[...marketSeen].map(x=>seen.get(x)).filter(Boolean);
-   const {missingRanks}=rankCoverage(marketRows,scope);
-   const research=researchStatus(marketRows,sig.aborted,stage);
-   const {marketStatus,watchStatus}=scanStatuses({canceled:sig.aborted,stage,marketErrors,watchErrors,missing,pagesOK,pages,shortPages,duplicateCount,marketCount:marketSeen.size,scope,missingRanks,include});
+   const {missingRanks:providerMissingRanks}=rankCoverage(marketRows,scope);
+   const providerResearch=researchStatus(marketRows,sig.aborted,stage);
    const fallbackIds=[];
    if(!sig.aborted){
     for(const coinId of missing){
@@ -194,8 +193,19 @@ export default function App(){
     }
    }
    const unresolved=missing.filter(x=>!fallbackIds.includes(x));
-   setRaw([...seen.values()]);
-   setMeta({id,wanted,marketStatus,watchStatus,marketErrors,watchErrors,missing,fallbackIds,unresolved,pagesOK,pages,duplicateCount,shortPages,missingRanks,marketCount:marketSeen.size,research,recoveryAttempts,recoveryAccepted,repairNotes});
+   const ranked=assignDisplayRanks([...seen.values()],scope);
+   const rankedMarket=ranked.filter(c=>c.marketMember===true);
+   const effectiveRows=rankedMarket.map(c=>({...c,market_cap_rank:c.displayRank}));
+   const {missingRanks}=rankCoverage(effectiveRows,scope);
+   const fallbackRanks=rankedMarket.filter(c=>c.rankSource==="FALLBACK").length;
+   const researchFallbacks=rankedMarket.filter(c=>c.rankSource==="FALLBACK"&&c.displayRank<=500).length;
+   const research=researchStatus(effectiveRows,sig.aborted,stage);
+   if(research.status==="Complete"&&researchFallbacks)research.status="Complete (calculated)";
+   const statuses=scanStatuses({canceled:sig.aborted,stage,marketErrors,watchErrors,missing,pagesOK,pages,shortPages,duplicateCount,marketCount:marketSeen.size,scope,missingRanks,include});
+   const marketStatus=statuses.marketStatus==="Complete"&&fallbackRanks?"Complete (calculated)":statuses.marketStatus;
+   const watchStatus=statuses.watchStatus;
+   setRaw(ranked);
+   setMeta({id,wanted,marketStatus,watchStatus,marketErrors,watchErrors,missing,fallbackIds,unresolved,pagesOK,pages,duplicateCount,shortPages,missingRanks,marketCount:marketSeen.size,research,providerResearch,providerMissingRanks,fallbackRanks,researchFallbacks,recoveryAttempts,recoveryAccepted,repairNotes});
    setMessage("Market: "+marketStatus+" · Watchlist: "+watchStatus+" — "+seen.size+" unique records ("+fallbackIds.length+" historical)");setRunning(false);setProgress(null);active.current=null;
   }
  }
@@ -232,16 +242,19 @@ export default function App(){
   <p role="status">{message} {running&&" · "+raw.length+" loaded"}</p>
   {running&&progress&&<ScanCountdown progress={progress}/>}
   {meta&&<>
-   <div className={meta.marketStatus==="Complete"?"report":"warning"}><strong>Market scan: {meta.marketStatus}</strong> · {meta.pagesOK}/{meta.pages} pages · {meta.marketCount} market coins · {meta.duplicateCount} duplicate rows · {meta.shortPages} short pages · {meta.missingRanks.length} missing ranks
+   <div className={meta.marketStatus.startsWith("Complete")?"report":"warning"}><strong>Market scan: {meta.marketStatus}</strong> · {meta.pagesOK}/{meta.pages} pages · {meta.marketCount} market coins · {meta.duplicateCount} duplicate rows · {meta.shortPages} short pages · {meta.missingRanks.length} missing ranks
    {!!meta.marketErrors.length&&<p>Market errors: {meta.marketErrors.join("; ")}</p>}
-   {!!meta.missingRanks.length&&<p>Missing ranks: {meta.missingRanks.join(", ")}</p>}
+   {!!meta.missingRanks.length&&<p>Missing local ranks (insufficient market records): {meta.missingRanks.join(", ")}</p>}
+   <p>Calculated market ranks: {meta.fallbackRanks} · CoinGecko rank gaps before fallback: {meta.providerMissingRanks.length}</p>
+   {!!meta.providerMissingRanks.length&&<p>Original provider gaps: {meta.providerMissingRanks.join(", ")}</p>}
    {!!meta.recoveryAttempts&&<p>Targeted rechecks: {meta.recoveryAttempts} · Improved pages: {meta.recoveryAccepted}</p>}
    {!!meta.repairNotes.length&&<p>{meta.repairNotes.join("; ")}</p>}
-   {meta.marketStatus!=="Complete"&&<p>Full market coverage is incomplete. Check the separate top-500 research status.</p>}
+   {!meta.marketStatus.startsWith("Complete")&&<p>Full market coverage is incomplete. Check the separate top-500 research status.</p>}
    </div>
-   <div className={meta.research.status==="Complete"?"report":"warning"}><strong>Top 500 research coverage: {meta.research.status}</strong> · {meta.research.covered}/500 distinct ranks
+   <div className={meta.research.status.startsWith("Complete")?"report":"warning"}><strong>Top 500 research coverage: {meta.research.status}</strong> · {meta.research.covered}/500 distinct local ranks · {meta.researchFallbacks} calculated
    {!!meta.research.missing.length&&<p>Missing research ranks: {meta.research.missing.join(", ")}</p>}
-   {meta.research.status!=="Complete"&&<p>Do not treat the research universe as complete.</p>}
+   {meta.researchFallbacks>0&&<p>CoinGecko-confirmed coverage: {meta.providerResearch.covered}/500. Calculated ranks require verification before investing.</p>}
+   {!meta.research.status.startsWith("Complete")&&<p>Do not treat the research universe as complete.</p>}
    </div>
    <div className={["Complete","Skipped"].includes(meta.watchStatus)?"report":"warning"}><strong>Watchlist: {meta.watchStatus}</strong> · {meta.wanted.length-meta.missing.length}/{meta.wanted.length} live quotes · {meta.fallbackIds.length} historical fallback records
    {!!meta.watchErrors.length&&<p>Watchlist errors: {meta.watchErrors.join("; ")}</p>}
@@ -253,7 +266,7 @@ export default function App(){
   <div className="controls"><label>Filter<select value={filter} onChange={e=>setFilter(e.target.value)}><option value="all">All collected</option><option value="top500">Top 500</option><option value="watch">Watchlist</option><option value="static">Historical only</option></select></label>
    <label>Search<input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Name, symbol or ID"/></label>
    <button disabled={running||!meta||!data.length} onClick={()=>copyMarket(data)}>Copy all to Excel</button><button disabled={running||!meta||!visible.length} onClick={()=>copyMarket(visible)}>Copy filtered to Excel</button></div>
-  <p>{visible.length} displayed. ATH recovery is historical upside, not an expected return. Top 500 indicates rank only, not investment approval. Historical-only records are excluded from new rounds.</p>
+  <p>{visible.length} displayed. ATH recovery is historical upside, not an expected return. Rank uses CoinGecko when possible, calculated market ranks when needed, and local watchlist positions after the selected market range. Original provider ranks are retained separately. Top 500 is not investment approval.</p>
   <div className="table-wrap"><table><thead><tr>{columns.map(([label,key])=><th key={key}><button onClick={()=>setSort(s=>({key,asc:s.key===key?!s.asc:true}))}>{label}{sort.key===key?(sort.asc?" ↑":" ↓"):""}</button></th>)}</tr></thead><tbody>{visible.map(c=><tr key={c.id}>{columns.map(([,key])=><td key={key}>{cell(c[key])}</td>)}</tr>)}</tbody></table></div>
   </section>
   <section><h2>Investment round allocator</h2><p>Paste 20 unique CoinGecko IDs and your researched expected ROI percentages from Excel. Ranked automatically; no trades are executed.</p>

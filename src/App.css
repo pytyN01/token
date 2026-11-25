@@ -1,20 +1,20 @@
 :root {
   color-scheme: dark;
-  --page: #0d1117;
-  --panel: #161b22;
-  --text: #e6edf3;
-  --muted: #a5b2c2;
-  --border: #303b49;
-  --control-border: #526175;
-  --control: #212b38;
-  --button: #263547;
-  --button-hover: #34465d;
-  --heading: #233041;
-  --stripe: #1c2430;
-  --focus: #79b8ff;
-  --warning-text: #ffd18a;
-  --warning-border: #b88239;
-  --warning-bg: #282116;
+  --page: #000000;
+  --panel: #0a0a0a;
+  --text: #ededed;
+  --muted: #a1a1a1;
+  --border: #292929;
+  --control-border: #444444;
+  --control: #0a0a0a;
+  --button: #171717;
+  --button-hover: #262626;
+  --heading: #171717;
+  --stripe: #101010;
+  --focus: #0070f3;
+  --warning-text: #f5b955;
+  --warning-border: #82531b;
+  --warning-bg: #171109;
 }
 :root[data-theme="light"] {
   color-scheme: light;
@@ -74,3 +74,9 @@ tr:nth-child(even) { background: var(--stripe); }
 .scan-progress-heading span, .scan-progress small { color: var(--muted); }
 .scan-progress progress { width: 100%; height: 12px; margin-top: 10px; accent-color: var(--focus); }
 .scan-progress p { margin: 8px 0 4px; }
+
+/* Vercel-inspired dark palette, neutral controls, restrained blue accent. */
+:root:not([data-theme="light"]) .terminal section { border-radius: 8px; }
+:root:not([data-theme="light"]) .controls > button:first-of-type { background: #ededed; color: #111111; border-color: #ededed; }
+:root:not([data-theme="light"]) .controls > button:first-of-type:not(:disabled):hover { background: #cccccc; }
+:root:not([data-theme="light"]) input[type="checkbox"] { accent-color: #0070f3; }
